@@ -77,7 +77,7 @@ and [listening's numbers](decisions/2026-10-22-listening-s-numbers-are-settings.
   …})
 
 ;; the browser
-(def store (doorbell/make-question-store #(mailroom/send-message! (:http addresses) shapes-by-name % {:wire wire})
+(def store (doorbell/make-question-store #(mailroom/send-message! (:http addresses) shapes-by-name % {:wire wire :headers {}})
                                          {:gather-changes-ms         50       ; changes heard together, one round of asking
                                           :keep-unwatched-answers-ms 300000})) ; an unwatched answer is kept this long
 (mailroom/open-sse-line! (:sse addresses) (merge shapes-by-name doorbell/message-shapes-by-name)

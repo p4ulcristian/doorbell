@@ -8,7 +8,7 @@
    questions whose answers were read from the changed table:
 
      ;; wire is the app's (doorbell never makes one); mailroom takes it
-     (def store (doorbell/make-question-store #(mailroom/send-message! (:http addresses) shapes-by-name % {:wire wire})
+     (def store (doorbell/make-question-store #(mailroom/send-message! (:http addresses) shapes-by-name % {:wire wire :headers {}})
                                               {:gather-changes-ms 50 :keep-unwatched-answers-ms 300000}))
      (mailroom/open-sse-line! (:sse addresses) (merge shapes-by-name doorbell/message-shapes-by-name)
                               (doorbell/make-sse-handlers store)

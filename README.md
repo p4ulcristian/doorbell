@@ -10,7 +10,7 @@ the changed table; the gates (Postgres's row rules) decide what each asker
 gets. doorbell decides no one's access.
 
 ```clojure
-io.github.p4ulcristian/doorbell {:git/tag "v0.3.0" :git/sha "1c28ac4"}
+io.github.p4ulcristian/doorbell {:git/tag "v0.4.0" :git/sha "0236a89"}
 ```
 
 Needs [cellar](https://github.com/p4ulcristian/cellar) (Postgres: the

@@ -20,7 +20,13 @@
   (let [[shops-ready logs-ready] (doorbell/put-doorbell-on-tables [shops {:table :logs :doorbell [:silent "nobody reads logs live"]}])]
     (is (= {:function "doorbell.tell" :arguments []} (:on-change shops-ready))
         "no arguments: the trigger tells only the table")
-    (is (nil? (:on-change logs-ready)))))
+    (is (= [:on-change nil] (find logs-ready :on-change)) "a silent table writes out :on-change nil")))
+
+(deftest the-listening-settings-are-every-one-required
+  (let [{:keys [type errors]} (try (doorbell/start-listening! nil {:batch-window-ms 50 :stop-wiat-ms 2000})
+                                   (catch clojure.lang.ExceptionInfo e (ex-data e)))]
+    (is (= :doorbell/bad-settings type) "refused before it listens")
+    (is (= #{:check-stopped-every-ms :reconnect-after-ms :stop-wait-ms :stop-wiat-ms} (set (keys errors))))))
 
 (deftest a-batch-tells-each-changed-table-once
   (let [tables (telling/list-changed-tables

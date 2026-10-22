@@ -26,9 +26,9 @@ for the browser.
 | side | name | does |
 |---|---|---|
 | server | `install-tell-function!` | `doorbell.tell()`, which the triggers call; as the owner, before migrate |
-| server | `check-doorbell-of-tables` `put-doorbell-on-tables` | every table map says `:doorbell :tell` or `[:silent "why"]`; one that tells gets its triggers (cellar's `:on-change`) |
+| server | `check-doorbell-of-tables` `put-doorbell-on-tables` | every table map says `:doorbell :tell` or `[:silent "why"]`; one that tells gets its triggers (cellar's `:on-change`), a silent one `:on-change nil` |
 | server | `put-table-notes-into-handlers` | every answer notes the tables its steps read (`:mailroom/notes`) |
-| server | `start-listening!` `stop-listening!` | listens on the channel `doorbell`, tells every open line |
+| server | `listening-settings-shape` `start-listening!` `stop-listening!` | listens on the channel `doorbell`, tells every open line; its batch window, waits and reconnect delay are required settings |
 | server | `add-sse-line!` `remove-sse-line!` `count-open-lines` | for mailroom's `:on-sse-open` and `:on-sse-close` |
 | both | `store-settings-shape` | the question store's settings, every key required |
 | browser | `make-question-store` | answers kept by question, `[name params]`, asked through mailroom's `send-message!` |
@@ -37,21 +37,26 @@ for the browser.
 
 Nothing has a default: every setting is written out; a missing one
 refuses, named, with every other problem at once. What stays fixed, and
-why: [the decision](decisions/2026-10-22-doorbell-is-its-own-library.md).
+why: [the decision](decisions/2026-10-22-doorbell-is-its-own-library.md)
+and [listening's numbers](decisions/2026-10-22-listening-s-numbers-are-settings.md).
 
 ```clojure
 (require '[doorbell.api :as doorbell]
          '[cellar.api :as cellar])
 
-(def orders {:table :orders :columns […] :doorbell :tell})
-(def logs   {:table :logs :columns […] :doorbell [:silent "no screen shows logs"]})
+(def orders {:table :orders :columns […] :indexes […] :gates nil :doorbell :tell})
+(def logs   {:table :logs :columns […] :indexes […] :gates nil :doorbell [:silent "no screen shows logs"]})
+;; put-doorbell-on-tables writes :on-change, the triggers or nil
 
 ;; the deploy, as the role that owns the tables
 (doorbell/install-tell-function! owner-pool)
-(cellar/migrate! owner-pool (doorbell/put-doorbell-on-tables [orders logs]) changes)
+(cellar/migrate! owner-pool (doorbell/put-doorbell-on-tables [orders logs]) changes migrate-options)
 
 ;; the server, as the app's own role (it needs no grant for doorbell)
-(def bell (doorbell/start-listening! pool))
+(def bell (doorbell/start-listening! pool {:batch-window-ms        50     ; after the first change, how long more join its batch
+                                          :check-stopped-every-ms 500    ; one wait for a change, before looking whether it was stopped
+                                          :reconnect-after-ms     1000   ; after a break, the wait before listening again
+                                          :stop-wait-ms           2000})) ; how long stop-listening! waits
 (mailroom/make-routes-for-messages
  (doorbell/put-table-notes-into-handlers handlers)   ; each writes out :run-steps-in, nil for none
  settings

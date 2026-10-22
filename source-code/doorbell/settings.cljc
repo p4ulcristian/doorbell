@@ -19,6 +19,23 @@
    [:gather-changes-ms [:int {:min 0}]]
    [:keep-unwatched-answers-ms [:int {:min 0}]]])
 
+(def listening-settings-shape
+  "The server's listening settings, every key required: what
+   start-listening! hands cellar's start-listening!.
+   :batch-window-ms: after the first change is heard, how long to wait for
+   more, told together as one batch (each table once); 0: what has arrived
+   by then.
+   :check-stopped-every-ms: how long one wait for a change lasts before the
+   listener looks whether it was stopped.
+   :reconnect-after-ms: after the connection broke, how long to wait before
+   listening again (every line is told {:doorbell/missed {}} then).
+   :stop-wait-ms: how long stop-listening! waits for the listener to end."
+  [:map {:closed true}
+   [:batch-window-ms [:int {:min 0}]]
+   [:check-stopped-every-ms [:int {:min 1}]]
+   [:reconnect-after-ms [:int {:min 0}]]
+   [:stop-wait-ms [:int {:min 0}]]])
+
 (def handler-shape
   "What put-table-notes-into-handlers reads of a handler: its
    :run-steps-in, mailroom's, written out, nil to run the steps plainly.
@@ -40,6 +57,9 @@
 
 (defn check-store-settings [settings]
   (check-data-for-shape "The settings" :doorbell/bad-settings store-settings-shape settings))
+
+(defn check-listening-settings [settings]
+  (check-data-for-shape "The settings" :doorbell/bad-settings listening-settings-shape settings))
 
 (defn check-handlers [handlers]
   (check-data-for-shape "The handlers" :doorbell/bad-handlers handlers-shape handlers))

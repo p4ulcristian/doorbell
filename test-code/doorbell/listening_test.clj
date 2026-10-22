@@ -21,10 +21,17 @@
 (def ^:private owner (System/getenv "DOORBELL_TEST_USER"))
 
 (def ^:private shops
-  {:table :shops :columns [[:shop/id :uuid {:primary-key? true :default :random-uuid}]] :doorbell :tell})
+  {:table    :shops
+   :columns  [[:shop/id :uuid {:primary-key? true :default :random-uuid}]]
+   :indexes  []
+   :gates    nil
+   :doorbell :tell})
 
 (def ^:private logs
-  {:table :logs :columns [[:log/id :uuid {:primary-key? true :default :random-uuid}]]
+  {:table    :logs
+   :columns  [[:log/id :uuid {:primary-key? true :default :random-uuid}]]
+   :indexes  []
+   :gates    nil
    :doorbell [:silent "no screen shows logs"]})
 
 (defn- query [text] (cellar/make-query-from-sql-text "test" text))
@@ -47,14 +54,28 @@
 
 (defn- start-pool! [user]
   (cellar/start-pool! {:host "localhost" :port port :database "postgres" :user user :password nil
-                       :tls :off :pool-size 4 :statement-timeout-ms 5000 :time-zone "UTC"}))
+                       :tls :off :tls-root-cert nil
+                       :pool-size 4
+                       :connection-wait-ms 30000 :connection-check-wait-ms 5000
+                       :connection-max-lifetime-ms 1800000 :connection-keepalive-every-ms 120000
+                       :leak-warning-after-ms :none
+                       :connect-timeout-seconds 10 :read-timeout-seconds :none :tcp-keepalive? false
+                       :statement-timeout-ms 5000 :lock-timeout-ms :none :idle-in-transaction-timeout-ms :none
+                       :time-zone "UTC"}))
+
+(def ^:private migrate-options
+  {:instant-part {:statement-timeout-ms 10000 :lock-timeout-ms 5000}
+   :slow-part    {:statement-timeout-ms :none :lock-timeout-ms 5000}})
+
+(def ^:private listening-settings
+  {:batch-window-ms 50 :check-stopped-every-ms 500 :reconnect-after-ms 1000 :stop-wait-ms 2000})
 
 (defn- make-database! [owner-pool]
   (run-sql! owner-pool "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; DROP SCHEMA IF EXISTS doorbell CASCADE; DROP SCHEMA IF EXISTS cellar CASCADE")
   (run-sql! owner-pool "DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'doorbell_app') THEN CREATE ROLE doorbell_app LOGIN; END IF; END $$")
   (let [tables (doorbell/put-doorbell-on-tables [shops logs])]
     (doorbell/install-tell-function! owner-pool)        ; before the triggers: they call it
-    (with-out-str @(:slow-part (cellar/migrate! owner-pool tables [])))
+    (with-out-str @(:slow-part (cellar/migrate! owner-pool tables [] migrate-options)))
     (cellar/grant-tables-to-role! owner-pool tables "doorbell_app")))
 
 (defn- open-sse [server-port]
@@ -85,7 +106,7 @@
       (try
         (make-database! owner-pool)
         (let [app-pool (start-pool! "doorbell_app")
-              doorbell (doorbell/start-listening! app-pool)
+              doorbell (doorbell/start-listening! app-pool listening-settings)
               server   (mailroom/start-server!
                         (mailroom/make-ring-handler-from-routes
                          (mailroom/make-routes-for-messages
@@ -110,7 +131,7 @@
                 (is (= "{\"doorbell/changed\":{\"table\":\"shops\"}}" (read-next-data line-1)))
                 (is (= "{\"doorbell/changed\":{\"table\":\"shops\"}}" (read-next-data line-2))))
               (testing "one transaction's statements on one table ring once"
-                (cellar/run-in-transaction! app-pool
+                (cellar/run-in-transaction! app-pool {:read-only? false}
                                             (fn [transaction]
                                               (run-sql! transaction "INSERT INTO shops DEFAULT VALUES")
                                               (run-sql! transaction "UPDATE shops SET shop__id = shop__id")))
@@ -122,7 +143,7 @@
                 (run-sql! app-pool "DELETE FROM shops WHERE false")
                 (is (= :nothing (read-next-data line-1))))
               (testing "a rolled-back transaction rings nobody"
-                (try (cellar/run-in-transaction! app-pool
+                (try (cellar/run-in-transaction! app-pool {:read-only? false}
                                                  (fn [transaction]
                                                    (run-sql! transaction "INSERT INTO shops DEFAULT VALUES")
                                                    (throw (ex-info "roll back" {}))))
@@ -149,6 +170,6 @@
                 (is (= [:before] @around))))
             (finally
               (mailroom/stop-server! server)
-              (doorbell/stop-listening! doorbell)
+              (is (true? (doorbell/stop-listening! doorbell)) "the listener ended within its :stop-wait-ms")
               (cellar/stop-pool! app-pool))))
         (finally (cellar/stop-pool! owner-pool))))))

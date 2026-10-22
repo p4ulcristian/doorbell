@@ -7,6 +7,7 @@
 
 (deftest the-api-names
   (is (= '#{store-settings-shape
+           listening-settings-shape
            install-tell-function!
            check-doorbell-of-tables
            put-doorbell-on-tables

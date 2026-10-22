@@ -21,8 +21,13 @@
       doorbell decides no one's access.
 
      (doorbell/install-tell-function! owner-pool)
-     (cellar/migrate! owner-pool (doorbell/put-doorbell-on-tables tables) changes)
-     (def doorbell (doorbell/start-listening! pool))
+     (cellar/migrate! owner-pool (doorbell/put-doorbell-on-tables tables) changes
+                      {:instant-part {:statement-timeout-ms 30000 :lock-timeout-ms 5000}
+                       :slow-part    {:statement-timeout-ms :none :lock-timeout-ms 5000}})
+     (def doorbell (doorbell/start-listening! pool {:batch-window-ms        50
+                                                    :check-stopped-every-ms 500
+                                                    :reconnect-after-ms     1000
+                                                    :stop-wait-ms           2000}))
      ;; mailroom's :on-sse-open #(doorbell/add-sse-line! doorbell %),
      ;;            :on-sse-close #(doorbell/remove-sse-line! doorbell %)"
   (:require
@@ -38,6 +43,13 @@
    {:gather-changes-ms 50 :keep-unwatched-answers-ms 300000}. The browser
    checks them again when it makes the store."
   settings/store-settings-shape)
+
+(def listening-settings-shape
+  "The server's listening settings, every key required, what
+   start-listening! takes: {:batch-window-ms 50 :check-stopped-every-ms 500
+   :reconnect-after-ms 1000 :stop-wait-ms 2000}. See
+   doorbell.settings/listening-settings-shape for each key."
+  settings/listening-settings-shape)
 
 (def ^:private create-tell-function
   (cellar/make-query-from-sql-file "doorbell/create_tell_function.sql"))
@@ -60,9 +72,10 @@
 
 (defn put-doorbell-on-tables
   "The table maps, checked (check-doorbell-of-tables), each that tells
-   given :on-change: the triggers cellar makes.
+   given :on-change: the triggers cellar makes; each silent one :on-change
+   nil.
 
-     (cellar/migrate! owner-pool (doorbell/put-doorbell-on-tables tables) changes)"
+     (cellar/migrate! owner-pool (doorbell/put-doorbell-on-tables tables) changes migrate-options)"
   [tables]
   (tables/put-on-change-on-tables tables))
 
@@ -120,17 +133,28 @@
 (defn start-listening!
   "Listens for changes, on the channel doorbell, and tells every open
    line. Holds one connection of the pool; the app's own role, owning
-   nothing, may listen. Returns the doorbell, for add-sse-line!,
-   remove-sse-line!, count-open-lines and stop-listening!."
-  [pool]
+   nothing, may listen. The settings (listening-settings-shape), every key
+   required, are checked first (:doorbell/bad-settings):
+
+     {:batch-window-ms        50     ; after the first change, how long more join its batch
+      :check-stopped-every-ms 500    ; one wait for a change, before looking whether it was stopped
+      :reconnect-after-ms     1000   ; after a break, the wait before listening again
+      :stop-wait-ms           2000}  ; how long stop-listening! waits for the listener
+
+   Returns the doorbell, for add-sse-line!, remove-sse-line!,
+   count-open-lines and stop-listening!."
+  [pool settings]
+  (settings/check-listening-settings settings)
   (let [doorbell {:lines (atom {})}]
     (assoc doorbell :listener
            (cellar/start-listening! pool "doorbell"
-                                    {:on-notifications #(tell-of-notifications! doorbell %)
-                                     :on-reconnect     #(tell-every-line! doorbell telling/missed-message)}))))
+                                    (assoc settings
+                                           :on-notifications #(tell-of-notifications! doorbell %)
+                                           :on-reconnect     #(tell-every-line! doorbell telling/missed-message))))))
 
 (defn stop-listening!
-  "Stops listening; the lines stay open until the server stops."
+  "Stops listening; the lines stay open until the server stops. Waits at
+   most the settings' :stop-wait-ms; returns whether the listener had ended."
   [{:keys [listener]}]
   (cellar/stop-listening! listener))
 

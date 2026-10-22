@@ -6,7 +6,8 @@
 
    A table that says nothing stops the start, every problem at once: no
    table is quiet by accident. A table that tells gets :on-change, the
-   triggers cellar makes, calling doorbell.tell."
+   triggers cellar makes, calling doorbell.tell; a silent one :on-change
+   nil, written out as cellar requires."
   (:require
    [clojure.string :as str]))
 
@@ -31,11 +32,12 @@
                       {:type :doorbell/bad-tables :problems (vec problems)})))))
 
 (defn put-on-change-on-tables
-  "The tables, checked, each that tells given :on-change."
+  "The tables, checked, each that tells given :on-change, each silent one
+   :on-change nil."
   [tables]
   (check-doorbell-of-tables tables)
   (mapv (fn [table]
           (if (= :tell (:doorbell table))
             (assoc table :on-change {:function "doorbell.tell" :arguments []})
-            table))
+            (assoc table :on-change nil)))
         tables))

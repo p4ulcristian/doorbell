@@ -14,6 +14,7 @@
    [jsonista.core :as json]
    [logbook.api :as logbook]
    [mailroom.api :as mailroom]
+   [meter.api :as meter]
    [wire.api :as wire])
   (:import
    (java.io BufferedReader)
@@ -75,7 +76,16 @@
    :addresses {:http "/mail/http" :sse "/mail/sse" :ws "/mail/ws"}
    :ping-every-ms 25000 :sse-reconnect-after-ms 3000 :ws-reopen-after-ms 1000
    :stop-wait-ms 1000 :stop-wait-after-cut-ms 1000
-   :rate-limit-buckets-before-cleanup 10000})
+   :rate-limit-buckets-before-cleanup 10000
+   :metric-buckets {:answer-seconds [0.01 0.1 1]}})
+
+(defn- make-meter
+  "A meter, as an app makes its own."
+  []
+  (meter/make-meter {:jvm-metrics false :most-series-per-metric 10000} {:log log}))
+
+(defn- find-metric-lines [a-meter prefix]
+  (filterv #(str/starts-with? % prefix) (str/split-lines (meter/write-metrics-text a-meter))))
 
 (defn- start-pool! [user]
   (cellar/start-pool! {:host "localhost" :port port :database "postgres" :user user :password nil
@@ -86,7 +96,11 @@
                        :leak-warning-after-ms :none
                        :connect-timeout-seconds 10 :read-timeout-seconds :none :tcp-keepalive? false
                        :statement-timeout-ms 5000 :lock-timeout-ms :none :idle-in-transaction-timeout-ms :none
-                       :time-zone "UTC"}))
+                       :time-zone "UTC"
+                       :metric-buckets {:query-seconds [0.01 0.1 1] :connection-acquire-seconds [0.01 0.1 1]
+                                        :connection-usage-seconds [0.01 0.1 1]}}
+                      ;; a meter per pool, as cellar takes it: the app's pool's is the app's meter
+                      {:log log :meter (make-meter)}))
 
 (def ^:private migrate-options
   {:instant-part {:statement-timeout-ms 10000 :lock-timeout-ms 5000}
@@ -118,6 +132,12 @@
                            :else                            (recur)))))
          2000 :nothing))
 
+(defn- wait-for [done?]
+  (loop [tries 100]
+    (when (and (pos? tries) (not (done?)))
+      (Thread/sleep 50)
+      (recur (dec tries)))))
+
 (defn- wait-for-lines [doorbell n]
   (loop [tries 50]
     (when (and (pos? tries) (not= n (doorbell/count-open-lines doorbell)))
@@ -131,13 +151,16 @@
       (try
         (make-database! owner-pool)
         (let [app-pool (start-pool! "doorbell_app")
-              doorbell (doorbell/start-listening! app-pool listening-settings {:log log})
+              ;; one meter for the app: the pool's, mailroom's and doorbell's metrics
+              app-meter (:cellar/meter app-pool)
+              doorbell (doorbell/start-listening! app-pool listening-settings {:log log :meter app-meter :tables [shops logs]})
               server   (mailroom/start-server!
                         (mailroom/make-ring-handler-from-routes
                          (mailroom/make-routes-for-messages
                           (doorbell/put-table-notes-into-handlers handlers) server-settings
                           {:wire                test-wire
                            :log                 log
+                           :meter               app-meter
                            :find-rate-limit-key #(mailroom/find-client-address % nil)
                            :on-sse-open #(doorbell/add-sse-line! doorbell %) :on-sse-close #(doorbell/remove-sse-line! doorbell %)
                            :on-ws-open nil :on-ws-close nil})
@@ -176,7 +199,19 @@
                                                    (run-sql! transaction "INSERT INTO shops DEFAULT VALUES")
                                                    (throw (ex-info "roll back" {}))))
                      (catch clojure.lang.ExceptionInfo _))
-                (is (= :nothing (read-next-data line-2)))))
+                (is (= :nothing (read-next-data line-2))))
+              (testing "the changes heard, by table, and the lines told, on the app's meter"
+                (is (= ["doorbell_changes_total{table=\"shops\"} 2"] (find-metric-lines app-meter "doorbell_changes_total")))
+                (is (= ["doorbell_tells_total{message=\"changed\"} 4"] (find-metric-lines app-meter "doorbell_tells_total")))
+                (is (= ["doorbell_listening 1"] (find-metric-lines app-meter "doorbell_listening"))))
+              (testing "a break in listening: every line told it may have missed changes, counted; cellar counts the reconnect"
+                (run-sql! owner-pool "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE query = 'LISTEN doorbell'")
+                ;; read from the counts: a line's reader from a test above may still be waiting on it
+                (wait-for #(= 2 (count (find-metric-lines app-meter "doorbell_tells_total"))))
+                (is (= ["doorbell_tells_total{message=\"changed\"} 4" "doorbell_tells_total{message=\"missed\"} 2"]
+                       (find-metric-lines app-meter "doorbell_tells_total")))
+                (is (= ["cellar_listening_reconnects_total 1"] (find-metric-lines app-meter "cellar_listening_reconnects_total")))
+                (is (= ["doorbell_listening 1"] (find-metric-lines app-meter "doorbell_listening")))))
             (testing "an answer comes with the tables its steps read"
               (let [ready (doorbell/put-table-notes-into-handlers
                            {:shops/all {:params-shape nil :answer-shape nil :rate-limit nil :run-steps-in nil
@@ -211,5 +246,27 @@
             (finally
               (mailroom/stop-server! server)
               (is (true? (doorbell/stop-listening! doorbell)) "the listener ended within its :stop-wait-ms")
+              (is (= ["doorbell_listening 0"] (find-metric-lines app-meter "doorbell_listening")) "not once stopped")
               (cellar/stop-pool! app-pool))))
         (finally (cellar/stop-pool! owner-pool))))))
+
+(deftest the-options-are-required-and-a-table-outside-the-set-is-other
+  (testing "the app's log, meter and tables, before anything listens"
+    (is (= {:type :doorbell/bad-options :errors {:meter ["missing required key"] :tables ["missing required key"]}}
+           (try (doorbell/start-listening! nil listening-settings {:log log})
+                (catch clojure.lang.ExceptionInfo e (select-keys (ex-data e) [:type :errors])))))
+    (is (= :meter/not-a-meter
+           (try (doorbell/start-listening! nil listening-settings {:log log :meter {} :tables [shops]})
+                (catch clojure.lang.ExceptionInfo e (:type (ex-data e)))))))
+  (testing "a change to a table the set doesn't hold is counted as other"
+    (let [m        (make-meter)
+          doorbell {:lines (atom {}) :meter m}]
+      (#'doorbell.metrics/declare-metrics! m [logs shops] (atom nil))
+      (#'doorbell.api/tell-of-notifications! doorbell [{:channel "doorbell" :payload "{\"folder\":\"public\",\"table\":\"shops\"}"}
+                                                      {:channel "doorbell" :payload "{\"folder\":\"public\",\"table\":\"logs\"}"}
+                                                      {:channel "doorbell" :payload "{\"folder\":\"billing\",\"table\":\"invoices\"}"}])
+      (is (= ["doorbell_changes_total{table=\"other\"} 2" "doorbell_changes_total{table=\"shops\"} 1"]
+             (find-metric-lines m "doorbell_changes_total"))
+          "logs is silent, billing/invoices isn't in the tables: both other")
+      (is (= ["doorbell_listening 0"] (find-metric-lines m "doorbell_listening")) "no listener yet"))))
+

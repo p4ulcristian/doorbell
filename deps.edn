@@ -6,9 +6,11 @@
  :deps
  {;; Postgres: the trigger's function, the table maps' :on-change, listening,
   ;; the tables a handler's queries read
-  io.github.p4ulcristian/cellar   {:git/tag "v0.2.0" :git/sha "ec613de"}
+  io.github.p4ulcristian/cellar   {:git/tag "v0.4.1" :git/sha "4d86120"}
   ;; the sse lines a change is told on (each carries the app's wire), a handler's notes
-  io.github.p4ulcristian/mailroom {:git/tag "v0.6.0" :git/sha "c0e5059"}
+  io.github.p4ulcristian/mailroom {:git/tag "v0.7.0" :git/sha "640d4f1"}
+  ;; the app's meter, handed in: changes heard, lines told, whether it listens
+  io.github.p4ulcristian/meter    {:git/tag "v0.1.2" :git/sha "a0a977b"}
   ;; the settings checked by their shapes
   metosin/malli                  {:mvn/version "0.20.3"}
   ;; Postgres's change messages read, JSON doorbell's own trigger writes
@@ -23,7 +25,7 @@
                        ;; the tests' wire, made as an app makes its own (mailroom brings the same)
                        io.github.p4ulcristian/wire {:git/tag "v0.2.0" :git/sha "d66b7cb"}
                        ;; the tests' log, made as an app makes its own (mailroom brings the same)
-                       io.github.p4ulcristian/logbook {:git/tag "v0.1.0" :git/sha "7c3222f"}}
+                       io.github.p4ulcristian/logbook {:git/tag "v0.1.1" :git/sha "51a2c93"}}
          :exec-fn     cognitect.test-runner.api/test
          :exec-args   {:dirs ["test-code"]}}
   ;; the browser tests, through shadow-cljs:  npm install && npx shadow-cljs compile test

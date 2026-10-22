@@ -42,9 +42,16 @@
 (def listening-options-shape
   "start-listening!'s options, every key required. :log: the app's log
    function (logbook's), handed to cellar's listener: a break in listening
-   and a failure telling the lines are written to it."
+   and a failure telling the lines are written to it. :meter: the app's
+   meter (meter's make-meter): doorbell's metrics are declared on it, and
+   cellar's listener counts its reconnects on it; one make-meter didn't
+   make is refused (:meter/not-a-meter). :tables: the app's table maps, as
+   put-doorbell-on-tables takes them: the ones that tell are the set the
+   changes are counted by."
   [:map {:closed true}
-   [:log [fn? {:error/message "should be the app's log function, made by logbook"}]]])
+   [:log [fn? {:error/message "should be the app's log function, made by logbook"}]]
+   [:meter [some? {:error/message "should be the app's meter, made by meter.api/make-meter"}]]
+   [:tables [:sequential map?]]])
 
 (def handler-shape
   "What put-table-notes-into-handlers reads of a handler: its

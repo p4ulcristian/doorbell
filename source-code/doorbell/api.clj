@@ -28,7 +28,9 @@
                                                     :check-stopped-every-ms 500
                                                     :reconnect-after-ms     1000
                                                     :stop-wait-ms           2000}
-                                              {:log log}))   ; the app's (logbook's)
+                                              {:log    log      ; the app's (logbook's)
+                                               :meter  meter    ; the app's (meter's)
+                                               :tables tables}))   ; the app's table maps: the changes' set
      ;; mailroom's :on-sse-open #(doorbell/add-sse-line! doorbell %),
      ;;            :on-sse-close #(doorbell/remove-sse-line! doorbell %)
 
@@ -36,10 +38,17 @@
    routes were made with: doorbell never makes a wire. Nor a log: the
    listener writes to the one start-listening! is handed, and the notes
    are taken with the message's own, :mailroom/log, so a query whose
-   tables Postgres can't say is written with the request's id."
+   tables Postgres can't say is written with the request's id.
+
+   start-listening! declares doorbell's metrics on the app's meter, its
+   :meter (doorbell.metrics): doorbell_changes_total{table}, the telling
+   tables of its :tables as the set; doorbell_tells_total{message};
+   doorbell_listening. It hands the meter to cellar's listener, which
+   counts its reconnects."
   (:require
    [cellar.api :as cellar]
    [mailroom.api :as mailroom]
+   [doorbell.metrics :as metrics]
    [doorbell.settings :as settings]
    [doorbell.tables :as tables]
    [doorbell.telling :as telling]))
@@ -131,23 +140,34 @@
   [{:keys [lines]} line]
   (swap! lines dissoc (:mailroom/channel line)))
 
-(defn- tell-every-line! [{:keys [lines]} message]
-  (doseq [line (vals @lines)]
-    (mailroom/send-message-on-sse-line! line message nil)))
+(defn- tell-every-line!
+  "Tells every open line the message; counts how many were told, as
+   message-kind (:changed or :missed)."
+  [{:keys [lines meter]} message-kind message]
+  (let [open-lines (vals @lines)]
+    (doseq [line open-lines]
+      (mailroom/send-message-on-sse-line! line message nil))
+    (metrics/count-tells! meter message-kind (count open-lines))))
 
-(defn- tell-of-notifications! [doorbell notifications]
-  (doseq [table (telling/list-changed-tables (map :payload notifications))]
-    (tell-every-line! doorbell (telling/make-changed-message table))))
+(defn- tell-of-notifications! [{:keys [meter] :as doorbell} notifications]
+  (let [tables (map (comp telling/turn-payload-into-table :payload) notifications)]
+    (doseq [table tables]
+      (metrics/count-change! meter table))
+    (doseq [table (distinct tables)]
+      (tell-every-line! doorbell :changed (telling/make-changed-message table)))))
 
 (defn start-listening!
   "Listens for changes, on the channel doorbell, and tells every open
    line. Holds one connection of the pool; the app's own role, owning
    nothing, may listen. The settings (listening-settings-shape), every key
-   required, are checked first (:doorbell/bad-settings), and the options,
-   {:log log}, the app's log, which a break in listening
-   (:cellar/listening-broke) and a failure telling the lines
-   (:cellar/listener-function-failed) are written to
-   (:doorbell/bad-options):
+   required, are checked first (:doorbell/bad-settings), and the options
+   (:doorbell/bad-options), every key required: :log, the app's log, which
+   a break in listening (:cellar/listening-broke) and a failure telling the
+   lines (:cellar/listener-function-failed) are written to; :meter, the
+   app's meter, which doorbell's metrics are declared on and counted into
+   (doorbell.metrics), and cellar's listener counts its reconnects on;
+   :tables, the app's table maps, as put-doorbell-on-tables takes them,
+   whose telling ones are the changes' set:
 
      {:batch-window-ms        50     ; after the first change, how long more join its batch
       :check-stopped-every-ms 500    ; one wait for a change, before looking whether it was stopped
@@ -159,13 +179,20 @@
   [pool settings options]
   (settings/check-listening-settings settings)
   (settings/check-listening-options options)
-  (let [doorbell {:lines (atom {})}]
+  (let [{:keys [log meter tables]} options
+        listener-holder (atom nil)
+        doorbell        {:lines (atom {}) :meter meter}]
+    (tables/check-doorbell-of-tables tables)
+    ;; and a meter meter didn't make is refused here (:meter/not-a-meter)
+    (metrics/declare-metrics! meter tables listener-holder)
     (assoc doorbell :listener
-           (cellar/start-listening! pool "doorbell"
-                                    (assoc settings
-                                           :log              (:log options)
-                                           :on-notifications #(tell-of-notifications! doorbell %)
-                                           :on-reconnect     #(tell-every-line! doorbell telling/missed-message))))))
+           (reset! listener-holder
+                   (cellar/start-listening! pool "doorbell"
+                                            (assoc settings
+                                                   :log              log
+                                                   :meter            meter
+                                                   :on-notifications #(tell-of-notifications! doorbell %)
+                                                   :on-reconnect     #(tell-every-line! doorbell :missed telling/missed-message)))))))
 
 (defn stop-listening!
   "Stops listening; the lines stay open until the server stops. Waits at

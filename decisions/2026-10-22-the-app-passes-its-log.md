@@ -1,5 +1,7 @@
 # The app passes its log; the notes are taken with the message's
 
+> **Changed in part** by [Changes heard and lines told are counted on the app's meter](2026-10-23-changes-and-tells-are-counted-on-the-apps-meter.md) (2026-10-23, v0.5.0): `start-listening!`'s options also take `:meter`, the app's meter, and `:tables`, the app's table maps.
+
 > Changes in part [Listening's numbers are doorbell's settings](2026-10-22-listening-s-numbers-are-settings.md) (`start-listening!` takes an options map too). Since v0.3.0, on cellar v0.2.0 and mailroom v0.3.0.
 
 **Decision:** doorbell writes no line itself, and makes no log. Its two callers of cellar that write lines are handed one:

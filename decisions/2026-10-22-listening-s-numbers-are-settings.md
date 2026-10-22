@@ -1,5 +1,7 @@
 # Listening's numbers are doorbell's settings; a silent table writes out its :on-change
 
+> **Changed in part** by [The app passes its log](2026-10-22-the-app-passes-its-log.md) (2026-10-22, v0.3.0): `start-listening!` also takes an options map, `{:log log}`.
+
 > Changes in part [doorbell is its own library](2026-10-22-doorbell-is-its-own-library.md): listening's timings, which it left to cellar, fixed there. Since v0.1.1, with cellar v0.1.3.
 
 **Decision:** `start-listening!` takes the listening settings, every key required, checked before it listens (`:doorbell/bad-settings`, every problem at once, the map closed), and hands them to cellar's `start-listening!`, which requires them since cellar v0.1.2:

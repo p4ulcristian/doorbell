@@ -13,5 +13,6 @@ All but the last three were made while doorbell was a library inside Groundwork,
 - [The question store v1](2026-10-22-the-question-store-v1.md), changed in part by [sync tells by table and trusts the gates](2026-10-22-sync-tells-by-table-and-trusts-the-gates.md) and [doorbell is its own library](2026-10-22-doorbell-is-its-own-library.md)
 - [sync tells by table and trusts the gates](2026-10-22-sync-tells-by-table-and-trusts-the-gates.md), changed in part by [doorbell is its own library](2026-10-22-doorbell-is-its-own-library.md)
 - [doorbell is its own library](2026-10-22-doorbell-is-its-own-library.md), changed in part by [Listening's numbers are doorbell's settings](2026-10-22-listening-s-numbers-are-settings.md) and [doorbell takes no wire](2026-10-22-doorbell-takes-no-wire.md)
-- [Listening's numbers are doorbell's settings; a silent table writes out its :on-change](2026-10-22-listening-s-numbers-are-settings.md)
+- [Listening's numbers are doorbell's settings; a silent table writes out its :on-change](2026-10-22-listening-s-numbers-are-settings.md), changed in part by [The app passes its log](2026-10-22-the-app-passes-its-log.md)
 - [doorbell takes no wire: lines carry the app's, Postgres's messages are read with jsonista](2026-10-22-doorbell-takes-no-wire.md)
+- [The app passes its log; the notes are taken with the message's](2026-10-22-the-app-passes-its-log.md)

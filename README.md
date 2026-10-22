@@ -23,7 +23,10 @@ jsonista (Postgres's change messages read). One public namespace,
 doorbell never makes a [wire](https://github.com/p4ulcristian/wire) and
 takes none: an sse line is told by the wire it carries, the app's, which
 mailroom's routes were made with; in the browser the app's `send-message!`
-and `open-sse-line!` calls hand mailroom the app's wire.
+and `open-sse-line!` calls hand mailroom the app's wire. Nor a log:
+`start-listening!` takes the app's under `:log` in a new options map, for
+cellar's listener, and the notes are taken with the message's own,
+mailroom's `:mailroom/log` ([why](decisions/2026-10-22-the-app-passes-its-log.md)).
 
 ## The api
 
@@ -32,7 +35,7 @@ and `open-sse-line!` calls hand mailroom the app's wire.
 | server | `install-tell-function!` | `doorbell.tell()`, which the triggers call; as the owner, before migrate |
 | server | `check-doorbell-of-tables` `put-doorbell-on-tables` | every table map says `:doorbell :tell` or `[:silent "why"]`; one that tells gets its triggers (cellar's `:on-change`), a silent one `:on-change nil` |
 | server | `put-table-notes-into-handlers` | every answer notes the tables its steps read (`:mailroom/notes`) |
-| server | `listening-settings-shape` `start-listening!` `stop-listening!` | listens on the channel `doorbell`, tells every open line; its batch window, waits and reconnect delay are required settings |
+| server | `listening-settings-shape` `start-listening!` `stop-listening!` | listens on the channel `doorbell`, tells every open line; its batch window, waits and reconnect delay are required settings, the app's log a required option |
 | server | `add-sse-line!` `remove-sse-line!` `count-open-lines` | for mailroom's `:on-sse-open` and `:on-sse-close` |
 | both | `store-settings-shape` | the question store's settings, every key required |
 | browser | `make-question-store` | answers kept by question, `[name params]`, asked through mailroom's `send-message!` |
@@ -60,11 +63,13 @@ and [listening's numbers](decisions/2026-10-22-listening-s-numbers-are-settings.
 (def bell (doorbell/start-listening! pool {:batch-window-ms        50     ; after the first change, how long more join its batch
                                           :check-stopped-every-ms 500    ; one wait for a change, before looking whether it was stopped
                                           :reconnect-after-ms     1000   ; after a break, the wait before listening again
-                                          :stop-wait-ms           2000})) ; how long stop-listening! waits
+                                          :stop-wait-ms           2000}  ; how long stop-listening! waits
+                                     {:log log}))                        ; the app's: a break in listening is written to it
 (mailroom/make-routes-for-messages
  (doorbell/put-table-notes-into-handlers handlers)   ; each writes out :run-steps-in, nil for none
  settings
  {:wire         wire                                  ; the app's; each line carries it
+  :log          log                                   ; the app's; each message's steps get one with its request id
   :on-sse-open  #(doorbell/add-sse-line! bell %)
   :on-sse-close #(doorbell/remove-sse-line! bell %)
   …})

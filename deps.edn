@@ -6,9 +6,9 @@
  :deps
  {;; Postgres: the trigger's function, the table maps' :on-change, listening,
   ;; the tables a handler's queries read
-  io.github.p4ulcristian/cellar   {:git/tag "v0.1.3" :git/sha "e23e1b4"}
+  io.github.p4ulcristian/cellar   {:git/tag "v0.2.0" :git/sha "ec613de"}
   ;; the sse lines a change is told on (each carries the app's wire), a handler's notes
-  io.github.p4ulcristian/mailroom {:git/tag "v0.2.0" :git/sha "ee4331c"}
+  io.github.p4ulcristian/mailroom {:git/tag "v0.3.0" :git/sha "81ef0ab"}
   ;; the settings checked by their shapes
   metosin/malli                  {:mvn/version "0.20.3"}
   ;; Postgres's change messages read, JSON doorbell's own trigger writes
@@ -21,7 +21,9 @@
                        ;; HikariCP (in cellar) logs through SLF4J; tests pick no logger
                        org.slf4j/slf4j-nop {:mvn/version "2.0.17"}
                        ;; the tests' wire, made as an app makes its own (mailroom brings the same)
-                       io.github.p4ulcristian/wire {:git/tag "v0.2.0" :git/sha "d66b7cb"}}
+                       io.github.p4ulcristian/wire {:git/tag "v0.2.0" :git/sha "d66b7cb"}
+                       ;; the tests' log, made as an app makes its own (mailroom brings the same)
+                       io.github.p4ulcristian/logbook {:git/tag "v0.1.0" :git/sha "7c3222f"}}
          :exec-fn     cognitect.test-runner.api/test
          :exec-args   {:dirs ["test-code"]}}
   ;; the browser tests, through shadow-cljs:  npm install && npx shadow-cljs compile test

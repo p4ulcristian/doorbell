@@ -11,6 +11,8 @@
    [clojure.test :refer [deftest is testing]]
    [cellar.api :as cellar]
    [doorbell.api :as doorbell]
+   [jsonista.core :as json]
+   [logbook.api :as logbook]
    [mailroom.api :as mailroom]
    [wire.api :as wire])
   (:import
@@ -32,6 +34,15 @@
                        :max-document-length       nil
                        :max-token-count           nil
                        :max-writing-nesting-depth 1000}}))
+(def ^:private lines
+  "The lines the tests' log wrote, as JSON data."
+  (atom []))
+
+(def ^:private log
+  "The tests' log, made as an app makes its own; doorbell never makes one."
+  (logbook/log-function (logbook/make-logbook {:lowest-level :debug :format :json :errors-kept 10
+                                               :write-to     #(swap! lines conj (json/read-value %))})))
+
 (def ^:private owner (System/getenv "DOORBELL_TEST_USER"))
 
 (def ^:private shops
@@ -89,7 +100,7 @@
   (run-sql! owner-pool "DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'doorbell_app') THEN CREATE ROLE doorbell_app LOGIN; END IF; END $$")
   (let [tables (doorbell/put-doorbell-on-tables [shops logs])]
     (doorbell/install-tell-function! owner-pool)        ; before the triggers: they call it
-    (with-out-str @(:slow-part (cellar/migrate! owner-pool tables [] migrate-options)))
+    @(:slow-part (cellar/migrate! owner-pool tables [] (assoc migrate-options :log log)))
     (cellar/grant-tables-to-role! owner-pool tables "doorbell_app")))
 
 (defn- open-sse [server-port]
@@ -120,17 +131,19 @@
       (try
         (make-database! owner-pool)
         (let [app-pool (start-pool! "doorbell_app")
-              doorbell (doorbell/start-listening! app-pool listening-settings)
+              doorbell (doorbell/start-listening! app-pool listening-settings {:log log})
               server   (mailroom/start-server!
                         (mailroom/make-ring-handler-from-routes
                          (mailroom/make-routes-for-messages
                           (doorbell/put-table-notes-into-handlers handlers) server-settings
                           {:wire                test-wire
+                           :log                 log
                            :find-rate-limit-key #(mailroom/find-client-address % nil)
                            :on-sse-open #(doorbell/add-sse-line! doorbell %) :on-sse-close #(doorbell/remove-sse-line! doorbell %)
                            :on-ws-open nil :on-ws-close nil})
                          {:files nil})
-                        server-settings)]
+                        server-settings
+                        {:log log})]
           (try
             (testing "the app's own role owns nothing and has no grant on the folder doorbell"
               (is (= {:test/owns-nothing true :test/no-usage true}
@@ -170,7 +183,19 @@
                                         :steps [{:name  :answer-shops
                                                  :enter #(mailroom/add-answer-to-context % (count (cellar/find-rows app-pool find-shops {})))}]}})]
                 (is (= {:shops/all 2 :mailroom/notes {:shops/all {:tables ["shops"]}}}
-                       (mailroom/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire})))))
+                       (mailroom/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire :log log})))))
+            (testing "a query whose tables the planner can't say: written to the message's log, with its request id"
+              (reset! lines [])
+              (let [ready (doorbell/put-table-notes-into-handlers
+                           {:shops/all {:params-shape nil :answer-shape nil :rate-limit nil :run-steps-in nil
+                                        :steps [{:name  :ask-untyped
+                                                 :enter #(mailroom/add-answer-to-context
+                                                          % (:b (cellar/find-one-row app-pool (query "SELECT :x IS NULL AS b") {:x "a"})))}]}})]
+                (is (= {:shops/all false :mailroom/notes {:shops/all {:tables "any"}}}
+                       (mailroom/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire :log log})))
+                (let [[line] (filter #(= "cellar/tables-read-unknown" (get % "event")) @lines)]
+                  (is (= "warn" (get line "level")))
+                  (is (some? (get-in line ["context" "request-id"]))))))
             (testing "the notes are taken inside the handler's own :run-steps-in"
               (let [around (atom [])
                     ready  (doorbell/put-table-notes-into-handlers
@@ -180,7 +205,7 @@
                                                          (cellar/find-rows app-pool (query "SELECT log__id FROM logs") {})
                                                          (run context))
                                          :steps [{:name :answer :enter #(mailroom/add-answer-to-context % 0)}]}})]
-                (is (= {:shops/all {:tables []}} (:mailroom/notes (mailroom/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire})))
+                (is (= {:shops/all {:tables []}} (:mailroom/notes (mailroom/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire :log log})))
                     "logs, read around the steps, isn't noted")
                 (is (= [:before] @around))))
             (finally

@@ -27,12 +27,16 @@
      (def doorbell (doorbell/start-listening! pool {:batch-window-ms        50
                                                     :check-stopped-every-ms 500
                                                     :reconnect-after-ms     1000
-                                                    :stop-wait-ms           2000}))
+                                                    :stop-wait-ms           2000}
+                                              {:log log}))   ; the app's (logbook's)
      ;; mailroom's :on-sse-open #(doorbell/add-sse-line! doorbell %),
      ;;            :on-sse-close #(doorbell/remove-sse-line! doorbell %)
 
    A line is told by the wire it carries, the app's, which mailroom's
-   routes were made with: doorbell never makes a wire."
+   routes were made with: doorbell never makes a wire. Nor a log: the
+   listener writes to the one start-listening! is handed, and the notes
+   are taken with the message's own, :mailroom/log, so a query whose
+   tables Postgres can't say is written with the request's id."
   (:require
    [cellar.api :as cellar]
    [mailroom.api :as mailroom]
@@ -88,7 +92,7 @@
   {:tables (if (= :unknown tables) "any" (vec (sort (map turn-key-into-text tables))))})
 
 (defn- run-and-note-tables [run context]
-  (let [[context tables] (cellar/run-and-list-tables-read #(run context))]
+  (let [[context tables] (cellar/run-and-list-tables-read {:log (:mailroom/log context)} #(run context))]
     (assoc context :mailroom/notes (turn-tables-into-notes tables))))
 
 (defn- run-plainly [run context]
@@ -100,8 +104,10 @@
    planner couldn't say for one of its queries; mailroom sends it beside
    the answer. Only the steps count, not what runs around them in the
    handler's :run-steps-in (a session, who holds what): the notes are
-   taken inside it. Every handler writes out :run-steps-in, nil to run the
-   steps plainly; one that leaves it out refuses (:doorbell/bad-handlers)."
+   taken inside it, with the message's log (mailroom's :mailroom/log), which
+   a query the planner can't say is written to. Every handler writes out
+   :run-steps-in, nil to run the steps plainly; one that leaves it out
+   refuses (:doorbell/bad-handlers)."
   [handlers]
   (settings/check-handlers handlers)
   (update-vals handlers
@@ -137,7 +143,11 @@
   "Listens for changes, on the channel doorbell, and tells every open
    line. Holds one connection of the pool; the app's own role, owning
    nothing, may listen. The settings (listening-settings-shape), every key
-   required, are checked first (:doorbell/bad-settings):
+   required, are checked first (:doorbell/bad-settings), and the options,
+   {:log log}, the app's log, which a break in listening
+   (:cellar/listening-broke) and a failure telling the lines
+   (:cellar/listener-function-failed) are written to
+   (:doorbell/bad-options):
 
      {:batch-window-ms        50     ; after the first change, how long more join its batch
       :check-stopped-every-ms 500    ; one wait for a change, before looking whether it was stopped
@@ -146,12 +156,14 @@
 
    Returns the doorbell, for add-sse-line!, remove-sse-line!,
    count-open-lines and stop-listening!."
-  [pool settings]
+  [pool settings options]
   (settings/check-listening-settings settings)
+  (settings/check-listening-options options)
   (let [doorbell {:lines (atom {})}]
     (assoc doorbell :listener
            (cellar/start-listening! pool "doorbell"
                                     (assoc settings
+                                           :log              (:log options)
                                            :on-notifications #(tell-of-notifications! doorbell %)
                                            :on-reconnect     #(tell-every-line! doorbell telling/missed-message))))))
 

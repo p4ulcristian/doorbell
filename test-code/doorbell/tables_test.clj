@@ -23,10 +23,18 @@
     (is (= [:on-change nil] (find logs-ready :on-change)) "a silent table writes out :on-change nil")))
 
 (deftest the-listening-settings-are-every-one-required
-  (let [{:keys [type errors]} (try (doorbell/start-listening! nil {:batch-window-ms 50 :stop-wiat-ms 2000})
+  (let [{:keys [type errors]} (try (doorbell/start-listening! nil {:batch-window-ms 50 :stop-wiat-ms 2000} {:log (fn [_ _ _])})
                                    (catch clojure.lang.ExceptionInfo e (ex-data e)))]
     (is (= :doorbell/bad-settings type) "refused before it listens")
     (is (= #{:check-stopped-every-ms :reconnect-after-ms :stop-wait-ms :stop-wiat-ms} (set (keys errors))))))
+
+(deftest the-listening-options-take-the-apps-log
+  (let [{:keys [type errors]} (try (doorbell/start-listening! nil {:batch-window-ms 50 :check-stopped-every-ms 500
+                                                                   :reconnect-after-ms 1000 :stop-wait-ms 2000}
+                                                              {})
+                                   (catch clojure.lang.ExceptionInfo e (ex-data e)))]
+    (is (= :doorbell/bad-options type))
+    (is (= {:log ["missing required key"]} errors))))
 
 (deftest a-batch-tells-each-changed-table-once
   (let [tables (telling/list-changed-tables

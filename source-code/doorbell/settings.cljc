@@ -39,6 +39,13 @@
    [:reconnect-after-ms [:int {:min 0}]]
    [:stop-wait-ms [:int {:min 0}]]])
 
+(def listening-options-shape
+  "start-listening!'s options, every key required. :log: the app's log
+   function (logbook's), handed to cellar's listener: a break in listening
+   and a failure telling the lines are written to it."
+  [:map {:closed true}
+   [:log [fn? {:error/message "should be the app's log function, made by logbook"}]]])
+
 (def handler-shape
   "What put-table-notes-into-handlers reads of a handler: its
    :run-steps-in, mailroom's, written out, nil to run the steps plainly.
@@ -64,6 +71,9 @@
 
 (defn check-listening-settings [settings]
   (check-data-for-shape "The settings" :doorbell/bad-settings listening-settings-shape settings))
+
+(defn check-listening-options [options]
+  (check-data-for-shape "The options" :doorbell/bad-options listening-options-shape options))
 
 (defn check-handlers [handlers]
   (check-data-for-shape "The handlers" :doorbell/bad-handlers handlers-shape handlers))

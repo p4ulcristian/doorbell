@@ -40,6 +40,8 @@ mailroom's `:mailroom/log` ([why](decisions/2026-10-22-the-app-passes-its-log.md
 | both | `store-settings-shape` | the question store's settings, every key required |
 | browser | `make-question-store` | answers kept by question, `[name params]`, asked through mailroom's `send-message!` |
 | browser | `watch-question!` `ask-question-again!` `find-kept-answer` | a screen watches what it shows; asked now, and again when a table it read changes |
+| browser | `is-question-being-asked?` | whether a fresher answer is on its way: out now, or a gathered change will ask it |
+| browser | `hear-changed-table!` | a table changed, told by the browser itself (a write's answer): gathered, then what read it is asked again |
 | browser | `message-shapes-by-name` `make-sse-handlers` `hear-missed-changes!` | the two messages, their shapes and handlers; after a break, every watched question asked again |
 
 Nothing has a default: every setting is written out; a missing one

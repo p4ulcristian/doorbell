@@ -1,5 +1,7 @@
 # The question store v1
 
+> **Added to** by [A change can be told by the browser, and an answer on its way is known](2026-10-23-a-change-can-be-told-and-an-answer-on-its-way-known.md) (2026-10-23, v0.4.0): `hear-changed-table!` and `is-question-being-asked?`.
+
 > **Changed in part** by [doorbell is its own library](2026-10-22-doorbell-is-its-own-library.md) (2026-10-22, v0.1.0): the store is doorbell's; the 50 ms gather and the 5-minute keep are the required settings `:gather-changes-ms` and `:keep-unwatched-answers-ms`; the messages are `:doorbell/changed` and `:doorbell/missed`.
 
 > **Changed in part** by [sync tells by table and trusts the gates](2026-10-22-sync-tells-by-table-and-trusts-the-gates.md) (2026-10-22): `{:sync/changed …}` carries no `:ids` any more, so a screen of one record is asked again on any change to its table by design, not for now.

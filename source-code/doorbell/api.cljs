@@ -16,6 +16,8 @@
                                :on-open            #(when % (doorbell/hear-missed-changes! store))
                                :reconnect-after-ms sse-reconnect-after-ms})
      (def stop (doorbell/watch-question! store [:orders/of-shop {:shop/id shop-id}] show-orders!))
+     (doorbell/is-question-being-asked? store [:orders/of-shop {:shop/id shop-id}])  ; a fresher answer coming?
+     (doorbell/hear-changed-table! store \"orders\")         ; a write's answer noted it
      (stop)                                                 ; when the screen goes"
   (:require
    [doorbell.settings :as settings]
@@ -55,16 +57,34 @@
   [store question]
   (store/find-kept-answer store question))
 
-(defn make-sse-handlers
-  "The handlers for the server's two messages, to open the sse line with:
-   :doorbell/changed asks again what a changed table touches,
-   :doorbell/missed asks again everything watched."
-  [store]
-  {:doorbell/changed #(store/hear-change! store (:table %))
-   :doorbell/missed  (fn [_] (store/hear-missed! store))})
+(defn is-question-being-asked?
+  "Whether an answer newer than the kept one is on its way: the question
+   is out now, or a change heard and still gathered (:gather-changes-ms)
+   will ask it again. For waiting on the fresh answer rather than taking
+   the kept one."
+  [store question]
+  (store/is-being-asked? store question))
+
+(defn hear-changed-table!
+  "A table changed (its name, \"orders\"), as the sse line's
+   :doorbell/changed tells it: gathered with the other changes for
+   :gather-changes-ms, then every watched question that read it is asked
+   again. For a change the browser learns of itself: a write's answer,
+   whose notes name the tables it wrote."
+  [store table]
+  (store/hear-change! store table))
 
 (defn hear-missed-changes!
   "Asks again every watched question: for when the sse line opens again
    after a break, and changes may have gone unheard."
   [store]
   (store/hear-missed! store))
+
+(defn make-sse-handlers
+  "The handlers for the server's two messages, to open the sse line with:
+   :doorbell/changed asks again what a changed table touches
+   (hear-changed-table!), :doorbell/missed asks again everything watched
+   (hear-missed-changes!)."
+  [store]
+  {:doorbell/changed #(hear-changed-table! store (:table %))
+   :doorbell/missed  (fn [_] (hear-missed-changes! store))})

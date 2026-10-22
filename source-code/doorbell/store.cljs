@@ -124,6 +124,17 @@
                        (ask-watched-again! store tables)))
                    gather-changes-ms)))
 
+(defn is-being-asked?
+  "Whether an answer newer than the kept one is on its way: the question
+   is out, or a change heard and still gathered will ask it again (it is
+   watched and read a changed table)."
+  [{:keys [questions changed]} question]
+  (let [kept (get @questions question)]
+    (boolean (or (:out? kept)
+                 (and (seq (:watchers kept))
+                      (seq @changed)
+                      (does-question-read? kept @changed))))))
+
 (defn hear-missed!
   "Changes may have been missed (the line broke): every watched question
    is asked again."

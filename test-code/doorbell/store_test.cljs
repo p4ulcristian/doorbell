@@ -95,3 +95,51 @@
   (testing "both shapes for each of the server's two messages"
     (is (= #{:doorbell/changed :doorbell/missed} (set (keys doorbell/message-shapes-by-name))))
     (is (every? #(= #{:params-shape :answer-shape} (set (keys %))) (vals doorbell/message-shapes-by-name)))))
+
+(deftest a-change-the-browser-learns-of-itself
+  (async done
+         (let [{:keys [asked send-message!]} (make-stand-in-server {:orders/all ["orders"] :shops/all ["shops"]})
+               store (doorbell/make-question-store send-message! settings)]
+           (doorbell/watch-question! store [:orders/all {}] identity)
+           (doorbell/watch-question! store [:shops/all {}] identity)
+           (after-ms 10
+                     (fn []
+                       (doorbell/hear-changed-table! store "orders")
+                       (doorbell/hear-changed-table! store "orders")
+                       (after-ms 40
+                                 (fn []
+                                   (is (= {:orders/all 2 :shops/all 1} @asked)
+                                       "as the sse line's change: gathered, and only what read the table")
+                                   (done))))))))
+
+(deftest a-question-being-asked
+  (async done
+         (let [held     (atom [])
+               answer!  (fn [] (let [[[message resolve]] @held]
+                                 (swap! held subvec 1)
+                                 (let [[message-name] (first message)]
+                                   (resolve {message-name 1 :mailroom/notes {message-name {:tables ["orders"]}}}))))
+               store    (doorbell/make-question-store
+                         (fn [message] (js/Promise. (fn [resolve _] (swap! held conj [message resolve]))))
+                         settings)
+               orders   [:orders/all {}]]
+           (is (false? (doorbell/is-question-being-asked? store orders)) "never asked")
+           (doorbell/watch-question! store orders identity)
+           (is (true? (doorbell/is-question-being-asked? store orders)) "out")
+           (answer!)
+           (after-ms 5
+                     (fn []
+                       (is (false? (doorbell/is-question-being-asked? store orders)) "answered")
+                       (doorbell/hear-changed-table! store "shops")
+                       (is (false? (doorbell/is-question-being-asked? store orders)) "a change to a table it didn't read")
+                       (doorbell/hear-changed-table! store "orders")
+                       (is (true? (doorbell/is-question-being-asked? store orders)) "a change gathered that will ask it")
+                       (after-ms 40
+                                 (fn []
+                                   (is (= 1 (count @held)) "the gathering asked it")
+                                   (is (true? (doorbell/is-question-being-asked? store orders)) "out again")
+                                   (answer!)
+                                   (after-ms 5
+                                             (fn []
+                                               (is (false? (doorbell/is-question-being-asked? store orders)))
+                                               (done))))))))))

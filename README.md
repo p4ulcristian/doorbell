@@ -16,10 +16,14 @@ io.github.p4ulcristian/doorbell {:git/tag "v0.1.2" :git/sha "8eb842c"}
 Needs [cellar](https://github.com/p4ulcristian/cellar) (Postgres: the
 trigger's function, listening, the tables a query reads) and
 [mailroom](https://github.com/p4ulcristian/mailroom) (the sse lines, a
-handler's notes, the browser's messages), with
-[wire](https://github.com/p4ulcristian/wire), which comes with mailroom.
-One public namespace, `doorbell.api`: a `.clj` for the server, a `.cljs`
-for the browser.
+handler's notes, the browser's messages), malli (the settings checked) and
+jsonista (Postgres's change messages read). One public namespace,
+`doorbell.api`: a `.clj` for the server, a `.cljs` for the browser.
+
+doorbell never makes a [wire](https://github.com/p4ulcristian/wire) and
+takes none: an sse line is told by the wire it carries, the app's, which
+mailroom's routes were made with; in the browser the app's `send-message!`
+and `open-sse-line!` calls hand mailroom the app's wire.
 
 ## The api
 
@@ -60,17 +64,19 @@ and [listening's numbers](decisions/2026-10-22-listening-s-numbers-are-settings.
 (mailroom/make-routes-for-messages
  (doorbell/put-table-notes-into-handlers handlers)   ; each writes out :run-steps-in, nil for none
  settings
- {:on-sse-open  #(doorbell/add-sse-line! bell %)
+ {:wire         wire                                  ; the app's; each line carries it
+  :on-sse-open  #(doorbell/add-sse-line! bell %)
   :on-sse-close #(doorbell/remove-sse-line! bell %)
   …})
 
 ;; the browser
-(def store (doorbell/make-question-store #(mailroom/send-message! (:http addresses) shapes-by-name %)
+(def store (doorbell/make-question-store #(mailroom/send-message! (:http addresses) shapes-by-name % {:wire wire})
                                          {:gather-changes-ms         50       ; changes heard together, one round of asking
                                           :keep-unwatched-answers-ms 300000})) ; an unwatched answer is kept this long
 (mailroom/open-sse-line! (:sse addresses) (merge shapes-by-name doorbell/message-shapes-by-name)
                          (doorbell/make-sse-handlers store)
-                         {:on-open            #(when % (doorbell/hear-missed-changes! store))
+                         {:wire               wire
+                          :on-open            #(when % (doorbell/hear-missed-changes! store))
                           :reconnect-after-ms sse-reconnect-after-ms})
 (def stop (doorbell/watch-question! store [:orders/of-shop {:shop/id shop-id}] show-orders!))
 ```

@@ -7,11 +7,13 @@
    questions it shows; a change the server tells of asks again the watched
    questions whose answers were read from the changed table:
 
-     (def store (doorbell/make-question-store #(mailroom/send-message! (:http addresses) shapes-by-name %)
+     ;; wire is the app's (doorbell never makes one); mailroom takes it
+     (def store (doorbell/make-question-store #(mailroom/send-message! (:http addresses) shapes-by-name % {:wire wire})
                                               {:gather-changes-ms 50 :keep-unwatched-answers-ms 300000}))
      (mailroom/open-sse-line! (:sse addresses) (merge shapes-by-name doorbell/message-shapes-by-name)
                               (doorbell/make-sse-handlers store)
-                              {:on-open            #(when % (doorbell/hear-missed-changes! store))
+                              {:wire               wire
+                               :on-open            #(when % (doorbell/hear-missed-changes! store))
                                :reconnect-after-ms sse-reconnect-after-ms})
      (def stop (doorbell/watch-question! store [:orders/of-shop {:shop/id shop-id}] show-orders!))
      (stop)                                                 ; when the screen goes"

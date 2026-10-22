@@ -1,5 +1,7 @@
 # doorbell is its own library
 
+> **Changed in part** by [doorbell takes no wire](2026-10-22-doorbell-takes-no-wire.md) (2026-10-22, v0.2.0): doorbell needs cellar, mailroom, malli and jsonista; it takes no wire, and reads Postgres's change messages with jsonista.
+
 > **Changed in part** by [Listening's numbers are doorbell's settings](2026-10-22-listening-s-numbers-are-settings.md) (2026-10-22, v0.1.1): listening's four timings are required settings `start-listening!` takes, and a silent table gets `:on-change nil`.
 
 > Changes in part [sync tells by table and trusts the gates](2026-10-22-sync-tells-by-table-and-trusts-the-gates.md), [sync v1](2026-10-22-sync-v1.md) and [The question store v1](2026-10-22-the-question-store-v1.md): their names, their keys, their messages, and the two numbers they kept fixed.

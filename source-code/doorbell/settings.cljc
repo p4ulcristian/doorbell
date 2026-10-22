@@ -3,9 +3,12 @@
    checked before anything starts. Nothing has a default: every key is
    written out, and a missing or unknown one refuses, named, with every
    other problem at once. One file for both sides: an app that says the
-   browser's settings on the server checks them there too."
+   browser's settings on the server checks them there too. They are
+   checked by malli itself: they are values the app hands in, not data
+   crossing an edge."
   (:require
-   [wire.api :as wire]))
+   [malli.core :as malli]
+   [malli.error :as malli-error]))
 
 (def store-settings-shape
   "The question store's settings, in the browser, every key required.
@@ -50,9 +53,10 @@
   "Returns the data; throws {:type kind :errors …} with every problem at
    once when it doesn't fit the shape."
   [what kind shape data]
-  (when-let [errors (wire/find-errors-in-data-for-shape shape data)]
-    (throw (ex-info (str what " have problems: " (pr-str errors))
-                    {:type kind :errors errors})))
+  (when-let [explanation (malli/explain shape data)]
+    (let [errors (malli-error/humanize explanation)]
+      (throw (ex-info (str what " have problems: " (pr-str errors))
+                      {:type kind :errors errors}))))
   data)
 
 (defn check-store-settings [settings]

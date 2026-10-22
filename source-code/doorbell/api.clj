@@ -29,7 +29,10 @@
                                                     :reconnect-after-ms     1000
                                                     :stop-wait-ms           2000}))
      ;; mailroom's :on-sse-open #(doorbell/add-sse-line! doorbell %),
-     ;;            :on-sse-close #(doorbell/remove-sse-line! doorbell %)"
+     ;;            :on-sse-close #(doorbell/remove-sse-line! doorbell %)
+
+   A line is told by the wire it carries, the app's, which mailroom's
+   routes were made with: doorbell never makes a wire."
   (:require
    [cellar.api :as cellar]
    [mailroom.api :as mailroom]

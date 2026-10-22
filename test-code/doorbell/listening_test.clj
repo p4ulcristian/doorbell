@@ -11,13 +11,27 @@
    [clojure.test :refer [deftest is testing]]
    [cellar.api :as cellar]
    [doorbell.api :as doorbell]
-   [mailroom.api :as mailroom])
+   [mailroom.api :as mailroom]
+   [wire.api :as wire])
   (:import
    (java.io BufferedReader)
    (java.net URI)
    (java.net.http HttpClient HttpRequest HttpResponse$BodyHandlers)))
 
 (def ^:private port (some-> (System/getenv "DOORBELL_TEST_PORT") parse-long))
+
+(def ^:private test-wire
+  "The tests' wire, made as an app makes its own and hands to mailroom
+   (the values wire v0.1 had in effect); doorbell never makes one."
+  (wire/make-wire-from-settings
+   {:most-shapes-kept 1000
+    :json-limits      {:max-nesting-depth         1000
+                       :max-number-length         1000
+                       :max-string-length         20000000
+                       :max-name-length           50000
+                       :max-document-length       nil
+                       :max-token-count           nil
+                       :max-writing-nesting-depth 1000}}))
 (def ^:private owner (System/getenv "DOORBELL_TEST_USER"))
 
 (def ^:private shops
@@ -111,7 +125,8 @@
                         (mailroom/make-ring-handler-from-routes
                          (mailroom/make-routes-for-messages
                           (doorbell/put-table-notes-into-handlers handlers) server-settings
-                          {:find-rate-limit-key #(mailroom/find-client-address % nil)
+                          {:wire                test-wire
+                           :find-rate-limit-key #(mailroom/find-client-address % nil)
                            :on-sse-open #(doorbell/add-sse-line! doorbell %) :on-sse-close #(doorbell/remove-sse-line! doorbell %)
                            :on-ws-open nil :on-ws-close nil})
                          {:files nil})
@@ -155,7 +170,7 @@
                                         :steps [{:name  :answer-shops
                                                  :enter #(mailroom/add-answer-to-context % (count (cellar/find-rows app-pool find-shops {})))}]}})]
                 (is (= {:shops/all 2 :mailroom/notes {:shops/all {:tables ["shops"]}}}
-                       (mailroom/answer-message ready :no-rate-limits {} {:shops/all {}})))))
+                       (mailroom/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire})))))
             (testing "the notes are taken inside the handler's own :run-steps-in"
               (let [around (atom [])
                     ready  (doorbell/put-table-notes-into-handlers
@@ -165,7 +180,7 @@
                                                          (cellar/find-rows app-pool (query "SELECT log__id FROM logs") {})
                                                          (run context))
                                          :steps [{:name :answer :enter #(mailroom/add-answer-to-context % 0)}]}})]
-                (is (= {:shops/all {:tables []}} (:mailroom/notes (mailroom/answer-message ready :no-rate-limits {} {:shops/all {}})))
+                (is (= {:shops/all {:tables []}} (:mailroom/notes (mailroom/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire})))
                     "logs, read around the steps, isn't noted")
                 (is (= [:before] @around))))
             (finally

@@ -4,15 +4,19 @@
      {\"folder\": \"public\", \"table\": \"orders\"}
 
    and every open line hears each changed table once:
-   {:doorbell/changed {:table \"orders\"}}."
+   {:doorbell/changed {:table \"orders\"}}.
+
+   The payload is JSON doorbell's own trigger function writes for
+   Postgres, so doorbell reads it with jsonista itself, not through the
+   app's wire, which is for data crossing the app's edges."
   (:require
    [cellar.api :as cellar]
-   [wire.api :as wire]))
+   [jsonista.core :as json]))
 
 (defn turn-payload-into-table
   "A notification's text as the table key it names."
   [payload]
-  (let [{:keys [folder table]} (wire/turn-json-text-into-data payload)]
+  (let [{:strs [folder table]} (json/read-value payload)]
     (cellar/turn-table-name-into-table-key folder table)))
 
 (defn list-changed-tables

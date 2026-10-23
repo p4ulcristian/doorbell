@@ -10,7 +10,7 @@ the changed table; the gates (Postgres's row rules) decide what each asker
 gets. groundwork-live-updates decides no one's access.
 
 ```clojure
-io.github.p4ulcristian/groundwork-live-updates {:git/tag "v0.5.9" :git/sha "60cab75"}
+io.github.p4ulcristian/groundwork-live-updates {:git/tag "v0.5.10" :git/sha "17083cd"}
 ```
 
 Needs [groundwork-postgres](https://github.com/p4ulcristian/groundwork-postgres) (Postgres: the

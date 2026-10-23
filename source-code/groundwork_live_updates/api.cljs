@@ -1,4 +1,4 @@
-(ns doorbell.api
+(ns groundwork-live-updates.api
   "A change to a table rings every open screen, and the screens that read
    that table ask again: the browser's side. The server's side is this
    namespace's .clj half.
@@ -7,34 +7,34 @@
    questions it shows; a change the server tells of asks again the watched
    questions whose answers were read from the changed table:
 
-     ;; wire is the app's (doorbell never makes one); bridge takes it
-     (def store (doorbell/make-question-store #(bridge/send-message! (:http addresses) shapes-by-name % {:wire wire :headers {} :keep-alive? false})
+     ;; groundwork-shaped-json is the app's (groundwork-live-updates never makes one); bridge takes it
+     (def store (live-updates/make-question-store #(bridge/send-message! (:http addresses) shapes-by-name % {:shaper groundwork-shaped-json :headers {} :keep-alive? false})
                                               {:gather-changes-ms 50 :keep-unwatched-answers-ms 300000}))
-     (bridge/open-sse-line! (:sse addresses) (merge shapes-by-name doorbell/message-shapes-by-name)
-                              (doorbell/make-sse-handlers store)
-                              {:wire               wire
-                               :on-open            #(when % (doorbell/hear-missed-changes! store))
+     (bridge/open-sse-line! (:sse addresses) (merge shapes-by-name live-updates/message-shapes-by-name)
+                              (live-updates/make-sse-handlers store)
+                              {:shaper               groundwork-shaped-json
+                               :on-open            #(when % (live-updates/hear-missed-changes! store))
                                :on-break           nil
                                :reconnect-after-ms sse-reconnect-after-ms})
-     (def stop (doorbell/watch-question! store [:orders/of-shop {:shop/id shop-id}] show-orders!))
-     (doorbell/is-question-being-asked? store [:orders/of-shop {:shop/id shop-id}])  ; a fresher answer coming?
-     (doorbell/hear-changed-table! store \"orders\")         ; a write's answer noted it
+     (def stop (live-updates/watch-question! store [:orders/of-shop {:shop/id shop-id}] show-orders!))
+     (live-updates/is-question-being-asked? store [:orders/of-shop {:shop/id shop-id}])  ; a fresher answer coming?
+     (live-updates/hear-changed-table! store \"orders\")         ; a write's answer noted it
      (stop)                                                 ; when the screen goes"
   (:require
-   [doorbell.settings :as settings]
-   [doorbell.store :as store]))
+   [groundwork-live-updates.settings :as settings]
+   [groundwork-live-updates.store :as store]))
 
 (def message-shapes-by-name
   "The shapes of the server's two messages, for bridge's shapes-by-name:
-   {:doorbell/changed {:table \"orders\"}} and {:doorbell/missed {}};
+   {:groundwork-live-updates/changed {:table \"orders\"}} and {:groundwork-live-updates/missed {}};
    neither is ever refused, so their :refusals are {}."
-  {:doorbell/changed {:params-shape nil :answer-shape [:map {:closed true} [:table :string]] :refusals {}}
-   :doorbell/missed  {:params-shape nil :answer-shape [:map {:closed true}] :refusals {}}})
+  {:groundwork-live-updates/changed {:params-shape nil :answer-shape [:map {:closed true} [:table :string]] :refusals {}}
+   :groundwork-live-updates/missed  {:params-shape nil :answer-shape [:map {:closed true}] :refusals {}}})
 
 (defn make-question-store
   "A store that asks through send-message!: (fn [message]) -> a promise of
    the answer keyed by name, as bridge's send-message! gives it. Settings,
-   every key required, checked first (:doorbell/bad-settings):
+   every key required, checked first (:groundwork-live-updates/bad-settings):
    :gather-changes-ms, how long changes are gathered before the questions
    they touch are asked again; :keep-unwatched-answers-ms, how long an
    answer no screen watches is kept."
@@ -69,7 +69,7 @@
 
 (defn hear-changed-table!
   "A table changed (its name, \"orders\"), as the sse line's
-   :doorbell/changed tells it: gathered with the other changes for
+   :groundwork-live-updates/changed tells it: gathered with the other changes for
    :gather-changes-ms, then every watched question that read it is asked
    again. For a change the browser learns of itself: a write's answer,
    whose notes name the tables it wrote."
@@ -84,9 +84,9 @@
 
 (defn make-sse-handlers
   "The handlers for the server's two messages, to open the sse line with:
-   :doorbell/changed asks again what a changed table touches
-   (hear-changed-table!), :doorbell/missed asks again everything watched
+   :groundwork-live-updates/changed asks again what a changed table touches
+   (hear-changed-table!), :groundwork-live-updates/missed asks again everything watched
    (hear-missed-changes!)."
   [store]
-  {:doorbell/changed #(hear-changed-table! store (:table %))
-   :doorbell/missed  (fn [_] (hear-missed-changes! store))})
+  {:groundwork-live-updates/changed #(hear-changed-table! store (:table %))
+   :groundwork-live-updates/missed  (fn [_] (hear-missed-changes! store))})

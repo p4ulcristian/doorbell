@@ -1,4 +1,4 @@
-(ns doorbell.store
+(ns groundwork-live-updates.store
   "The browser keeps every answer under its question, [name params]:
 
      [:orders/of-shop {:shop/id #uuid \"…\"}]
@@ -16,19 +16,19 @@
    - An answer no screen watches is kept :keep-unwatched-answers-ms, then
      dropped.
    - An ask whose send-message! fails is answered bridge's own refusal for
-     no answer, {:bridge/refused :bridge/no-answer :bridge/data
+     no answer, {:groundwork-bridge/refused :groundwork-bridge/no-answer :groundwork-bridge/data
      {:http-status nil}}, as bridge's send-message! answers a request that got no
      response; that one never fails, so this comes only when the app's own
      send function does.")
 
 (def ^:private no-answer
-  "bridge's :bridge/no-answer, no response at all: no request id, since no
+  "bridge's :groundwork-bridge/no-answer, no response at all: no request id, since no
    server sent it."
-  {:bridge/refused :bridge/no-answer :bridge/data {:http-status nil}})
+  {:groundwork-bridge/refused :groundwork-bridge/no-answer :groundwork-bridge/data {:http-status nil}})
 
 (defn make-store
   "A store asking through send-message!, (fn [message]) -> a promise of the
-   answer, keyed by name, with :bridge/notes beside it; settings checked
+   answer, keyed by name, with :groundwork-bridge/notes beside it; settings checked
    already."
   [send-message! {:keys [gather-changes-ms keep-unwatched-answers-ms]}]
   {:send-message!             send-message!
@@ -63,7 +63,7 @@
   "The tables the server's notes say the answer was read from; \"any\"
    when it sent none."
   [answer message-name]
-  (let [tables (get-in answer [:bridge/notes message-name :tables])]
+  (let [tables (get-in answer [:groundwork-bridge/notes message-name :tables])]
     (if (some? tables) tables "any")))
 
 (defn ask!

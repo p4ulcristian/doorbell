@@ -1,5 +1,5 @@
-(ns doorbell.settings
-  "doorbell's settings, and the data its functions take, as malli shapes,
+(ns groundwork-live-updates.settings
+  "groundwork-live-updates's settings, and the data its functions take, as malli shapes,
    checked before anything starts. Nothing has a default: every key is
    written out, and a missing or unknown one refuses, named, with every
    other problem at once. One file for both sides: an app that says the
@@ -24,14 +24,14 @@
 
 (def listening-settings-shape
   "The server's listening settings, every key required: what
-   start-listening! hands cellar's start-listening!.
+   start-listening! hands groundwork-postgres's start-listening!.
    :batch-window-ms: after the first change is heard, how long to wait for
    more, told together as one batch (each table once); 0: what has arrived
    by then.
    :check-stopped-every-ms: how long one wait for a change lasts before the
    listener looks whether it was stopped.
    :reconnect-after-ms: after the connection broke, how long to wait before
-   listening again (every line is told {:doorbell/missed {}} then).
+   listening again (every line is told {:groundwork-live-updates/missed {}} then).
    :stop-wait-ms: how long stop-listening! waits for the listener to end."
   [:map {:closed true}
    [:batch-window-ms [:int {:min 0}]]
@@ -41,16 +41,16 @@
 
 (def listening-options-shape
   "start-listening!'s options, every key required. :log: the app's log
-   function (logbook's), handed to cellar's listener: a break in listening
+   function (groundwork-logs's), handed to groundwork-postgres's listener: a break in listening
    and a failure telling the lines are written to it. :meter: the app's
-   meter (meter's make-meter): doorbell's metrics are declared on it, and
-   cellar's listener counts its reconnects on it; one make-meter didn't
-   make is refused (:meter/not-a-meter). :tables: the app's table maps, as
-   put-doorbell-on-tables takes them: the ones that tell are the set the
+   meter (groundwork-metrics's make-meter): groundwork-live-updates's metrics are declared on it, and
+   groundwork-postgres's listener counts its reconnects on it; one make-meter didn't
+   make is refused (:groundwork-metrics/not-a-meter). :tables: the app's table maps, as
+   put-live-updates-on-tables takes them: the ones that tell are the set the
    changes are counted by."
   [:map {:closed true}
-   [:log [fn? {:error/message "should be the app's log function, made by logbook"}]]
-   [:meter [some? {:error/message "should be the app's meter, made by meter.api/make-meter"}]]
+   [:log [fn? {:error/message "should be the app's log function, made by groundwork-logs"}]]
+   [:meter [some? {:error/message "should be the app's meter, made by groundwork-metrics.api/make-meter"}]]
    [:tables [:sequential map?]]])
 
 (def handler-shape
@@ -74,13 +74,13 @@
   data)
 
 (defn check-store-settings [settings]
-  (check-data-for-shape "The settings" :doorbell/bad-settings store-settings-shape settings))
+  (check-data-for-shape "The settings" :groundwork-live-updates/bad-settings store-settings-shape settings))
 
 (defn check-listening-settings [settings]
-  (check-data-for-shape "The settings" :doorbell/bad-settings listening-settings-shape settings))
+  (check-data-for-shape "The settings" :groundwork-live-updates/bad-settings listening-settings-shape settings))
 
 (defn check-listening-options [options]
-  (check-data-for-shape "The options" :doorbell/bad-options listening-options-shape options))
+  (check-data-for-shape "The options" :groundwork-live-updates/bad-options listening-options-shape options))
 
 (defn check-handlers [handlers]
-  (check-data-for-shape "The handlers" :doorbell/bad-handlers handlers-shape handlers))
+  (check-data-for-shape "The handlers" :groundwork-live-updates/bad-handlers handlers-shape handlers))

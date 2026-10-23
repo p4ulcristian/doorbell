@@ -1,5 +1,5 @@
 {
-  "name": "doorbell",
+  "name": "groundwork-live-updates",
   "private": true,
   "description": "doorbell's ClojureScript test build; big.js comes for wire's exact decimals",
   "scripts": {

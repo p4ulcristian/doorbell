@@ -1,62 +1,62 @@
-(ns doorbell.api
+(ns groundwork-live-updates.api
   "A change to a table rings every open screen, and the screens that read
    that table ask again: the server's side. The browser's side is this
    namespace's .cljs half.
 
-   1. Every table map says whether its changes reach screens (:doorbell
-      :tell or [:silent \"why\"]); put-doorbell-on-tables checks that and
+   1. Every table map says whether its changes reach screens (:live-updates
+      :tell or [:silent \"why\"]); put-live-updates-on-tables checks that and
       gives the tables that tell their triggers, which call one Postgres
-      function, doorbell.tell(), after every statement; its .sql file
-      (function-files) is declared to cellar with the app's functions.
+      function, groundwork_live_updates.tell(), after every statement; its .sql file
+      (function-files) is declared to groundwork-postgres with the app's functions.
    2. Postgres tells every listening server, when a transaction commits,
       which table changed: no ids, no values. start-listening! listens,
       and tells every open sse line, once per table in what it gathered:
 
-        {:doorbell/changed {:table \"orders\"}}
+        {:groundwork-live-updates/changed {:table \"orders\"}}
 
-      After a break in listening, every line is told {:doorbell/missed {}}:
+      After a break in listening, every line is told {:groundwork-live-updates/missed {}}:
       something may have changed unheard.
    3. Every answer says the tables it was read from
       (put-table-notes-into-handlers), so the browser asks again only the
       questions a change touches; the gates decide what each asker gets.
-      doorbell decides no one's access.
+      groundwork-live-updates decides no one's access.
 
-     (cellar/migrate! owner-pool {:tables     (doorbell/put-doorbell-on-tables tables)
+     (postgres/migrate! owner-pool {:tables     (live-updates/put-live-updates-on-tables tables)
                                   :extensions []
-                                  :functions  doorbell/function-files   ; with the app's own
+                                  :functions  live-updates/function-files   ; with the app's own
                                   :views      []}
                       changes
                       {:instant-part {:statement-timeout-ms 30000 :lock-timeout-ms 5000}
                        :slow-part    {:statement-timeout-ms :none :lock-timeout-ms 5000}
                        :log          log})
-     (def doorbell (doorbell/start-listening! pool {:batch-window-ms        50
+     (def groundwork-live-updates (live-updates/start-listening! pool {:batch-window-ms        50
                                                     :check-stopped-every-ms 500
                                                     :reconnect-after-ms     1000
                                                     :stop-wait-ms           2000}
-                                              {:log    log      ; the app's (logbook's)
-                                               :meter  meter    ; the app's (meter's)
+                                              {:log    log      ; the app's (groundwork-logs's)
+                                               :meter  meter    ; the app's (groundwork-metrics's)
                                                :tables tables}))   ; the app's table maps: the changes' set
-     ;; bridge's :on-sse-open #(doorbell/add-sse-line! doorbell %),
-     ;;            :on-sse-close #(doorbell/remove-sse-line! doorbell %)
+     ;; bridge's :on-sse-open #(live-updates/add-sse-line! groundwork-live-updates %),
+     ;;            :on-sse-close #(live-updates/remove-sse-line! groundwork-live-updates %)
 
-   A line is told by the wire it carries, the app's, which bridge's
-   routes were made with: doorbell never makes a wire. Nor a log: the
+   A line is told by the shaper it carries, the app's, which bridge's
+   routes were made with: groundwork-live-updates never makes a shaper. Nor a log: the
    listener writes to the one start-listening! is handed, and the notes
-   are taken with the message's own, :bridge/log, so a query whose
+   are taken with the message's own, :groundwork-bridge/log, so a query whose
    tables Postgres can't say is written with the request's id.
 
-   start-listening! declares doorbell's metrics on the app's meter, its
-   :meter (doorbell.metrics): doorbell_changes_total{table}, the telling
-   tables of its :tables as the set; doorbell_tells_total{message};
-   doorbell_listening. It hands the meter to cellar's listener, which
+   start-listening! declares groundwork-live-updates's metrics on the app's meter, its
+   :meter (groundwork_live_updates.metrics): groundwork_live_updates_changes_total{table}, the telling
+   tables of its :tables as the set; groundwork_live_updates_tells_total{message};
+   groundwork_live_updates_listening. It hands the meter to groundwork-postgres's listener, which
    counts its reconnects."
   (:require
-   [cellar.api :as cellar]
-   [bridge.api :as bridge]
-   [doorbell.metrics :as metrics]
-   [doorbell.settings :as settings]
-   [doorbell.tables :as tables]
-   [doorbell.telling :as telling]))
+   [groundwork-postgres.api :as postgres]
+   [groundwork-bridge.api :as bridge]
+   [groundwork-live-updates.metrics :as metrics]
+   [groundwork-live-updates.settings :as settings]
+   [groundwork-live-updates.tables :as tables]
+   [groundwork-live-updates.telling :as telling]))
 
 (def store-settings-shape
   "The browser's question store's settings, every key required, for an
@@ -69,32 +69,32 @@
   "The server's listening settings, every key required, what
    start-listening! takes: {:batch-window-ms 50 :check-stopped-every-ms 500
    :reconnect-after-ms 1000 :stop-wait-ms 2000}. See
-   doorbell.settings/listening-settings-shape for each key."
+   groundwork-live-updates.settings/listening-settings-shape for each key."
   settings/listening-settings-shape)
 
 (def function-files
-  "The .sql file of doorbell.tell(), which the tables' triggers call, for
-   cellar's :functions beside the app's own: cellar makes the folder
-   doorbell and the function before the triggers, compares it with
+  "The .sql file of groundwork_live_updates.tell(), which the tables' triggers call, for
+   groundwork-postgres's :functions beside the app's own: groundwork-postgres makes the folder
+   groundwork-live-updates and the function before the triggers, compares it with
    Postgres's, and would drop it from the folder were it not declared.
    The app's own role, owning nothing, needs no grant for it: a trigger
    runs its function whoever writes, and anyone may notify and listen."
-  ["doorbell/tell.sql"])
+  ["groundwork_live_updates/tell.sql"])
 
-(defn check-doorbell-of-tables
-  "Throws with every problem at once (:doorbell/bad-tables): a table that
-   says nothing about its doorbell, [:silent] without a reason, a value
+(defn check-live-updates-of-tables
+  "Throws with every problem at once (:groundwork-live-updates/bad-tables): a table that
+   says nothing about its live updates, [:silent] without a reason, a value
    that is neither."
   [tables]
-  (tables/check-doorbell-of-tables tables))
+  (tables/check-live-updates-of-tables tables))
 
-(defn put-doorbell-on-tables
-  "The table maps, checked (check-doorbell-of-tables), each that tells
-   given :on-change: the triggers cellar makes; each silent one :on-change
+(defn put-live-updates-on-tables
+  "The table maps, checked (check-live-updates-of-tables), each that tells
+   given :on-change: the triggers groundwork-postgres makes; each silent one :on-change
    nil.
 
-     (cellar/migrate! owner-pool {:tables (doorbell/put-doorbell-on-tables tables) :extensions []
-                                  :functions doorbell/function-files :views []}
+     (postgres/migrate! owner-pool {:tables (live-updates/put-live-updates-on-tables tables) :extensions []
+                                  :functions live-updates/function-files :views []}
                       changes migrate-options)"
   [tables]
   (tables/put-on-change-on-tables tables))
@@ -105,8 +105,8 @@
   {:tables (if (= :unknown tables) "any" (vec (sort (map turn-key-into-text tables))))})
 
 (defn- run-and-note-tables [run context]
-  (let [[context tables] (cellar/run-and-list-tables-read {:log (:bridge/log context)} #(run context))]
-    (assoc context :bridge/notes (turn-tables-into-notes tables))))
+  (let [[context tables] (postgres/run-and-list-tables-read {:log (:groundwork-bridge/log context)} #(run context))]
+    (assoc context :groundwork-bridge/notes (turn-tables-into-notes tables))))
 
 (defn- run-plainly [run context]
   (run context))
@@ -117,10 +117,10 @@
    planner couldn't say for one of its queries; bridge sends it beside
    the answer. Only the steps count, not what runs around them in the
    handler's :run-steps-in (a session, who holds what): the notes are
-   taken inside it, with the message's log (bridge's :bridge/log), which
+   taken inside it, with the message's log (bridge's :groundwork-bridge/log), which
    a query the planner can't say is written to. Every handler writes out
    :run-steps-in, nil to run the steps plainly; one that leaves it out
-   refuses (:doorbell/bad-handlers)."
+   refuses (:groundwork-live-updates/bad-handlers)."
   [handlers]
   (settings/check-handlers handlers)
   (update-vals handlers
@@ -137,12 +137,12 @@
   "Keeps an sse line that has just opened, to tell of changes. For
    bridge's :on-sse-open."
   [{:keys [lines]} line]
-  (swap! lines assoc (:bridge/channel line) line))
+  (swap! lines assoc (:groundwork-bridge/channel line) line))
 
 (defn remove-sse-line!
   "Forgets a line that has closed. For bridge's :on-sse-close."
   [{:keys [lines]} line]
-  (swap! lines dissoc (:bridge/channel line)))
+  (swap! lines dissoc (:groundwork-bridge/channel line)))
 
 (defn- tell-every-line!
   "Tells every open line the message; counts how many were told, as
@@ -153,24 +153,24 @@
       (bridge/send-message-on-sse-line! line message nil))
     (metrics/count-tells! meter message-kind (count open-lines))))
 
-(defn- tell-of-notifications! [{:keys [meter] :as doorbell} notifications]
+(defn- tell-of-notifications! [{:keys [meter] :as live-updates} notifications]
   (let [tables (map (comp telling/turn-payload-into-table :payload) notifications)]
     (doseq [table tables]
       (metrics/count-change! meter table))
     (doseq [table (distinct tables)]
-      (tell-every-line! doorbell :changed (telling/make-changed-message table)))))
+      (tell-every-line! live-updates :changed (telling/make-changed-message table)))))
 
 (defn start-listening!
-  "Listens for changes, on the channel doorbell, and tells every open
+  "Listens for changes, on the channel groundwork_live_updates, and tells every open
    line. Holds one connection of the pool; the app's own role, owning
    nothing, may listen. The settings (listening-settings-shape), every key
-   required, are checked first (:doorbell/bad-settings), and the options
-   (:doorbell/bad-options), every key required: :log, the app's log, which
-   a break in listening (:cellar/listening-broke) and a failure telling the
-   lines (:cellar/listener-function-failed) are written to; :meter, the
-   app's meter, which doorbell's metrics are declared on and counted into
-   (doorbell.metrics), and cellar's listener counts its reconnects on;
-   :tables, the app's table maps, as put-doorbell-on-tables takes them,
+   required, are checked first (:groundwork-live-updates/bad-settings), and the options
+   (:groundwork-live-updates/bad-options), every key required: :log, the app's log, which
+   a break in listening (:groundwork-postgres/listening-broke) and a failure telling the
+   lines (:groundwork-postgres/listener-function-failed) are written to; :meter, the
+   app's meter, which groundwork-live-updates's metrics are declared on and counted into
+   (groundwork-live-updates.metrics), and groundwork-postgres's listener counts its reconnects on;
+   :tables, the app's table maps, as put-live-updates-on-tables takes them,
    whose telling ones are the changes' set:
 
      {:batch-window-ms        50     ; after the first change, how long more join its batch
@@ -178,31 +178,31 @@
       :reconnect-after-ms     1000   ; after a break, the wait before listening again
       :stop-wait-ms           2000}  ; how long stop-listening! waits for the listener
 
-   Returns the doorbell, for add-sse-line!, remove-sse-line!,
+   Returns the live updates, for add-sse-line!, remove-sse-line!,
    count-open-lines and stop-listening!."
   [pool settings options]
   (settings/check-listening-settings settings)
   (settings/check-listening-options options)
   (let [{:keys [log meter tables]} options
         listener-holder (atom nil)
-        doorbell        {:lines (atom {}) :meter meter}]
-    (tables/check-doorbell-of-tables tables)
-    ;; and a meter meter didn't make is refused here (:meter/not-a-meter)
+        live-updates        {:lines (atom {}) :meter meter}]
+    (tables/check-live-updates-of-tables tables)
+    ;; and a meter meter didn't make is refused here (:groundwork-metrics/not-a-meter)
     (metrics/declare-metrics! meter tables listener-holder)
-    (assoc doorbell :listener
+    (assoc live-updates :listener
            (reset! listener-holder
-                   (cellar/start-listening! pool "doorbell"
+                   (postgres/start-listening! pool "groundwork_live_updates"
                                             (assoc settings
                                                    :log              log
                                                    :meter            meter
-                                                   :on-notifications #(tell-of-notifications! doorbell %)
-                                                   :on-reconnect     #(tell-every-line! doorbell :missed telling/missed-message)))))))
+                                                   :on-notifications #(tell-of-notifications! live-updates %)
+                                                   :on-reconnect     #(tell-every-line! live-updates :missed telling/missed-message)))))))
 
 (defn stop-listening!
   "Stops listening; the lines stay open until the server stops. Waits at
    most the settings' :stop-wait-ms; returns whether the listener had ended."
   [{:keys [listener]}]
-  (cellar/stop-listening! listener))
+  (postgres/stop-listening! listener))
 
 (defn count-open-lines
   "How many sse lines are kept, for tests and a status page."

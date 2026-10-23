@@ -50,6 +50,8 @@
   {:table    :shops
    :columns  [[:shop/id :uuid {:primary-key? true :default :random-uuid}]]
    :indexes  []
+   :references []
+   :triggers  []
    :gates    nil
    :doorbell :tell})
 
@@ -57,6 +59,8 @@
   {:table    :logs
    :columns  [[:log/id :uuid {:primary-key? true :default :random-uuid}]]
    :indexes  []
+   :references []
+   :triggers  []
    :gates    nil
    :doorbell [:silent "no screen shows logs"]})
 

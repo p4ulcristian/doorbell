@@ -8,7 +8,7 @@
   ;; the tables a handler's queries read
   io.github.p4ulcristian/cellar   {:git/tag "v0.4.5" :git/sha "801ca83"}
   ;; the sse lines a change is told on (each carries the app's wire), a handler's notes
-  io.github.p4ulcristian/bridge {:git/tag "v0.7.5" :git/sha "35d9351"}
+  io.github.p4ulcristian/bridge {:git/tag "v0.7.6" :git/sha "3b42b42"}
   ;; the app's meter, handed in: changes heard, lines told, whether it listens
   io.github.p4ulcristian/meter    {:git/tag "v0.1.4" :git/sha "bf81c46"}
   ;; the settings checked by their shapes

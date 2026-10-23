@@ -6,8 +6,8 @@
 -- the gates' to decide when a screen asks again. A statement that changed
 -- no row tells nothing; Postgres sends one transaction's same message once.
 -- It runs as whoever wrote the rows: pg_notify needs no grant.
-CREATE SCHEMA IF NOT EXISTS doorbell;
-
+-- Declared to cellar (doorbell.api/function-files), which makes the
+-- folder doorbell and the function before the tables' triggers.
 CREATE OR REPLACE FUNCTION doorbell.tell() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE

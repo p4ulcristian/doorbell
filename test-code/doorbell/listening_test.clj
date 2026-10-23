@@ -50,6 +50,8 @@
   {:table    :shops
    :columns  [[:shop/id :uuid {:primary-key? true :default :random-uuid}]]
    :indexes  []
+   :uniques  []
+   :checks   []
    :references []
    :triggers  []
    :gates    nil
@@ -59,6 +61,8 @@
   {:table    :logs
    :columns  [[:log/id :uuid {:primary-key? true :default :random-uuid}]]
    :indexes  []
+   :uniques  []
+   :checks   []
    :references []
    :triggers  []
    :gates    nil
@@ -118,8 +122,8 @@
   (run-sql! owner-pool "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; DROP SCHEMA IF EXISTS doorbell CASCADE; DROP SCHEMA IF EXISTS cellar CASCADE")
   (run-sql! owner-pool "DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'doorbell_app') THEN CREATE ROLE doorbell_app LOGIN; END IF; END $$")
   (let [tables (doorbell/put-doorbell-on-tables [shops logs])]
-    (doorbell/install-tell-function! owner-pool)        ; before the triggers: they call it
-    @(:slow-part (cellar/migrate! owner-pool tables [] (assoc migrate-options :log log)))
+    @(:slow-part (cellar/migrate! owner-pool {:tables tables :extensions [] :functions doorbell/function-files :views []}
+                                  [] (assoc migrate-options :log log)))
     (cellar/grant-tables-to-role! owner-pool tables "doorbell_app")))
 
 (defn- open-sse [server-port]

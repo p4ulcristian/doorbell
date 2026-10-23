@@ -44,7 +44,7 @@ open lines.
 
 | side | name | does |
 |---|---|---|
-| server | `install-tell-function!` | `doorbell.tell()`, which the triggers call; as the owner, before migrate |
+| server | `function-files` | the `.sql` file of `doorbell.tell()`, which the triggers call, for cellar's `:functions` beside the app's own |
 | server | `check-doorbell-of-tables` `put-doorbell-on-tables` | every table map says `:doorbell :tell` or `[:silent "why"]`; one that tells gets its triggers (cellar's `:on-change`), a silent one `:on-change nil` |
 | server | `put-table-notes-into-handlers` | every answer notes the tables its steps read (`:bridge/notes`) |
 | server | `listening-settings-shape` `start-listening!` `stop-listening!` | listens on the channel `doorbell`, tells every open line; its batch window, waits and reconnect delay are required settings, the app's log, meter and tables required options |
@@ -65,13 +65,19 @@ and [listening's numbers](decisions/2026-10-22-listening-s-numbers-are-settings.
 (require '[doorbell.api :as doorbell]
          '[cellar.api :as cellar])
 
-(def orders {:table :orders :columns […] :indexes […] :gates nil :doorbell :tell})
-(def logs   {:table :logs :columns […] :indexes […] :gates nil :doorbell [:silent "no screen shows logs"]})
+(def orders {:table :orders :columns […] :indexes […] :uniques [] :checks [] :references [] :triggers []
+             :gates nil :doorbell :tell})
+(def logs   {:table :logs :columns […] :indexes […] :uniques [] :checks [] :references [] :triggers []
+             :gates nil :doorbell [:silent "no screen shows logs"]})
 ;; put-doorbell-on-tables writes :on-change, the triggers or nil
 
-;; the deploy, as the role that owns the tables
-(doorbell/install-tell-function! owner-pool)
-(cellar/migrate! owner-pool (doorbell/put-doorbell-on-tables [orders logs]) changes migrate-options)
+;; the deploy, as the role that owns the tables: cellar makes doorbell.tell()
+;; (function-files) before the triggers that call it
+(cellar/migrate! owner-pool {:tables     (doorbell/put-doorbell-on-tables [orders logs])
+                             :extensions []
+                             :functions  doorbell/function-files   ; with the app's own
+                             :views      []}
+                 changes migrate-options)
 
 ;; the server, as the app's own role (it needs no grant for doorbell)
 (def bell (doorbell/start-listening! pool {:batch-window-ms        50     ; after the first change, how long more join its batch

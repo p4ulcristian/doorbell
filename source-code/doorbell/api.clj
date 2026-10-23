@@ -6,7 +6,8 @@
    1. Every table map says whether its changes reach screens (:doorbell
       :tell or [:silent \"why\"]); put-doorbell-on-tables checks that and
       gives the tables that tell their triggers, which call one Postgres
-      function (install-tell-function!) after every statement.
+      function, doorbell.tell(), after every statement; its .sql file
+      (function-files) is declared to cellar with the app's functions.
    2. Postgres tells every listening server, when a transaction commits,
       which table changed: no ids, no values. start-listening! listens,
       and tells every open sse line, once per table in what it gathered:
@@ -20,10 +21,14 @@
       questions a change touches; the gates decide what each asker gets.
       doorbell decides no one's access.
 
-     (doorbell/install-tell-function! owner-pool)
-     (cellar/migrate! owner-pool (doorbell/put-doorbell-on-tables tables) changes
+     (cellar/migrate! owner-pool {:tables     (doorbell/put-doorbell-on-tables tables)
+                                  :extensions []
+                                  :functions  doorbell/function-files   ; with the app's own
+                                  :views      []}
+                      changes
                       {:instant-part {:statement-timeout-ms 30000 :lock-timeout-ms 5000}
-                       :slow-part    {:statement-timeout-ms :none :lock-timeout-ms 5000}})
+                       :slow-part    {:statement-timeout-ms :none :lock-timeout-ms 5000}
+                       :log          log})
      (def doorbell (doorbell/start-listening! pool {:batch-window-ms        50
                                                     :check-stopped-every-ms 500
                                                     :reconnect-after-ms     1000
@@ -67,17 +72,14 @@
    doorbell.settings/listening-settings-shape for each key."
   settings/listening-settings-shape)
 
-(def ^:private create-tell-function
-  (cellar/make-query-from-sql-file "doorbell/create_tell_function.sql"))
-
-(defn install-tell-function!
-  "Installs, or replaces, the folder doorbell and doorbell.tell(), which
-   the tables' triggers call. Run it as the owner, before migrate: Postgres
-   refuses a trigger whose function doesn't exist yet. The app's own role,
-   owning nothing, needs no grant for it: a trigger runs its function
-   whoever writes, and anyone may notify and listen."
-  [pool]
-  (cellar/run-statement! pool create-tell-function {}))
+(def function-files
+  "The .sql file of doorbell.tell(), which the tables' triggers call, for
+   cellar's :functions beside the app's own: cellar makes the folder
+   doorbell and the function before the triggers, compares it with
+   Postgres's, and would drop it from the folder were it not declared.
+   The app's own role, owning nothing, needs no grant for it: a trigger
+   runs its function whoever writes, and anyone may notify and listen."
+  ["doorbell/tell.sql"])
 
 (defn check-doorbell-of-tables
   "Throws with every problem at once (:doorbell/bad-tables): a table that
@@ -91,7 +93,9 @@
    given :on-change: the triggers cellar makes; each silent one :on-change
    nil.
 
-     (cellar/migrate! owner-pool (doorbell/put-doorbell-on-tables tables) changes migrate-options)"
+     (cellar/migrate! owner-pool {:tables (doorbell/put-doorbell-on-tables tables) :extensions []
+                                  :functions doorbell/function-files :views []}
+                      changes migrate-options)"
   [tables]
   (tables/put-on-change-on-tables tables))
 

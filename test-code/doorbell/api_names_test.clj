@@ -8,7 +8,7 @@
 (deftest the-api-names
   (is (= '#{store-settings-shape
            listening-settings-shape
-           install-tell-function!
+           function-files
            check-doorbell-of-tables
            put-doorbell-on-tables
            put-table-notes-into-handlers

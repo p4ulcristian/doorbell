@@ -25,9 +25,10 @@
 
 (def message-shapes-by-name
   "The shapes of the server's two messages, for bridge's shapes-by-name:
-   {:doorbell/changed {:table \"orders\"}} and {:doorbell/missed {}}."
-  {:doorbell/changed {:params-shape nil :answer-shape [:map {:closed true} [:table :string]]}
-   :doorbell/missed  {:params-shape nil :answer-shape [:map {:closed true}]}})
+   {:doorbell/changed {:table \"orders\"}} and {:doorbell/missed {}};
+   neither is ever refused, so their :refusals are {}."
+  {:doorbell/changed {:params-shape nil :answer-shape [:map {:closed true} [:table :string]] :refusals {}}
+   :doorbell/missed  {:params-shape nil :answer-shape [:map {:closed true}] :refusals {}}})
 
 (defn make-question-store
   "A store that asks through send-message!: (fn [message]) -> a promise of

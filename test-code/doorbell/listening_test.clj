@@ -71,7 +71,7 @@
 (def ^:private find-shops (query "SELECT shop__id FROM shops ORDER BY shop__id"))
 
 (def ^:private handlers
-  {:shops/all {:params-shape nil :answer-shape nil :rate-limit nil :run-steps-in nil
+  {:shops/all {:params-shape nil :answer-shape nil :refusals {} :rate-limit nil :run-steps-in nil
                :steps [{:name :answer-shops :enter identity}]}})
 
 (def ^:private server-settings
@@ -169,7 +169,7 @@
                            :find-rate-limit-key #(bridge/find-client-address % nil)
                            :on-sse-open #(doorbell/add-sse-line! doorbell %) :on-sse-close #(doorbell/remove-sse-line! doorbell %)
                            :on-ws-open nil :on-ws-close nil})
-                         {:files nil})
+                         {:files nil :not-found nil})
                         server-settings
                         {:log log})]
           (try
@@ -219,33 +219,33 @@
                 (is (= ["doorbell_listening 1"] (find-metric-lines app-meter "doorbell_listening")))))
             (testing "an answer comes with the tables its steps read"
               (let [ready (doorbell/put-table-notes-into-handlers
-                           {:shops/all {:params-shape nil :answer-shape nil :rate-limit nil :run-steps-in nil
+                           {:shops/all {:params-shape nil :answer-shape nil :refusals {} :rate-limit nil :run-steps-in nil
                                         :steps [{:name  :answer-shops
                                                  :enter #(bridge/add-answer-to-context % (count (cellar/find-rows app-pool find-shops {})))}]}})]
                 (is (= {:shops/all 2 :bridge/notes {:shops/all {:tables ["shops"]}}}
-                       (bridge/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire :log log})))))
+                       (bridge/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire :log log :meter app-meter :metric-buckets (:metric-buckets server-settings)})))))
             (testing "a query whose tables the planner can't say: written to the message's log, with its request id"
               (reset! lines [])
               (let [ready (doorbell/put-table-notes-into-handlers
-                           {:shops/all {:params-shape nil :answer-shape nil :rate-limit nil :run-steps-in nil
+                           {:shops/all {:params-shape nil :answer-shape nil :refusals {} :rate-limit nil :run-steps-in nil
                                         :steps [{:name  :ask-untyped
                                                  :enter #(bridge/add-answer-to-context
                                                           % (:b (cellar/find-one-row app-pool (query "SELECT :x IS NULL AS b") {:x "a"})))}]}})]
                 (is (= {:shops/all false :bridge/notes {:shops/all {:tables "any"}}}
-                       (bridge/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire :log log})))
+                       (bridge/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire :log log :meter app-meter :metric-buckets (:metric-buckets server-settings)})))
                 (let [[line] (filter #(= "cellar/tables-read-unknown" (get % "event")) @lines)]
                   (is (= "warn" (get line "level")))
                   (is (some? (get-in line ["context" "request-id"]))))))
             (testing "the notes are taken inside the handler's own :run-steps-in"
               (let [around (atom [])
                     ready  (doorbell/put-table-notes-into-handlers
-                            {:shops/all {:params-shape nil :answer-shape nil :rate-limit nil
+                            {:shops/all {:params-shape nil :answer-shape nil :refusals {} :rate-limit nil
                                          :run-steps-in (fn [run context]
                                                          (swap! around conj :before)
                                                          (cellar/find-rows app-pool (query "SELECT log__id FROM logs") {})
                                                          (run context))
                                          :steps [{:name :answer :enter #(bridge/add-answer-to-context % 0)}]}})]
-                (is (= {:shops/all {:tables []}} (:bridge/notes (bridge/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire :log log})))
+                (is (= {:shops/all {:tables []}} (:bridge/notes (bridge/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire :log log :meter app-meter :metric-buckets (:metric-buckets server-settings)})))
                     "logs, read around the steps, isn't noted")
                 (is (= [:before] @around))))
             (finally

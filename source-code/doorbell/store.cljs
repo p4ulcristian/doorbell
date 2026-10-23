@@ -11,14 +11,20 @@
    - Each answer comes with the tables it was read from (the server's notes);
      a change to one of them, heard over sse, asks again every watched
      question that read it, gathered for :gather-changes-ms. \"any\" means
-     every change; so does an answer without notes (an error answered
+     every change; so does an answer without notes (a refusal made
      before the handler's steps ran).
    - An answer no screen watches is kept :keep-unwatched-answers-ms, then
      dropped.
-   - An ask that gets no answer (the network, the server down) is answered
-     {:error \"No answer from the server.\"}.")
+   - An ask whose send-message! fails is answered bridge's own refusal for
+     no answer, {:bridge/refused :bridge/no-answer :bridge/data
+     {:http-status nil}}, as bridge's send-message! answers a request that got no
+     response; that one never fails, so this comes only when the app's own
+     send function does.")
 
-(def ^:private no-answer {:error "No answer from the server."})
+(def ^:private no-answer
+  "bridge's :bridge/no-answer, no response at all: no request id, since no
+   server sent it."
+  {:bridge/refused :bridge/no-answer :bridge/data {:http-status nil}})
 
 (defn make-store
   "A store asking through send-message!, (fn [message]) -> a promise of the

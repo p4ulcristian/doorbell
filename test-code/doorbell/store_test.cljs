@@ -81,7 +81,8 @@
            (doorbell/watch-question! store [:orders/all {}] #(swap! heard conj %))
            (after-ms 10
                      (fn []
-                       (is (= [{:error "No answer from the server."}] @heard))
+                       (is (= [{:bridge/refused :bridge/no-answer :bridge/data {:http-status nil}}] @heard)
+                           "bridge's own refusal for no response, no request id")
                        (done))))))
 
 (deftest the-store-says-its-settings
@@ -92,9 +93,10 @@
     (is (= #{:keep-unwatched-answers-ms} (set (keys (:errors problems)))))))
 
 (deftest the-messages-have-their-shapes
-  (testing "both shapes for each of the server's two messages"
+  (testing "the three shapes for each of the server's two messages, as bridge takes them"
     (is (= #{:doorbell/changed :doorbell/missed} (set (keys doorbell/message-shapes-by-name))))
-    (is (every? #(= #{:params-shape :answer-shape} (set (keys %))) (vals doorbell/message-shapes-by-name)))))
+    (is (every? #(= #{:params-shape :answer-shape :refusals} (set (keys %))) (vals doorbell/message-shapes-by-name)))
+    (is (every? #(= {} (:refusals %)) (vals doorbell/message-shapes-by-name)) "never refused")))
 
 (deftest a-change-the-browser-learns-of-itself
   (async done

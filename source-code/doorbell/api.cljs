@@ -8,12 +8,13 @@
    questions whose answers were read from the changed table:
 
      ;; wire is the app's (doorbell never makes one); bridge takes it
-     (def store (doorbell/make-question-store #(bridge/send-message! (:http addresses) shapes-by-name % {:wire wire :headers {}})
+     (def store (doorbell/make-question-store #(bridge/send-message! (:http addresses) shapes-by-name % {:wire wire :headers {} :keep-alive? false})
                                               {:gather-changes-ms 50 :keep-unwatched-answers-ms 300000}))
      (bridge/open-sse-line! (:sse addresses) (merge shapes-by-name doorbell/message-shapes-by-name)
                               (doorbell/make-sse-handlers store)
                               {:wire               wire
                                :on-open            #(when % (doorbell/hear-missed-changes! store))
+                               :on-break           nil
                                :reconnect-after-ms sse-reconnect-after-ms})
      (def stop (doorbell/watch-question! store [:orders/of-shop {:shop/id shop-id}] show-orders!))
      (doorbell/is-question-being-asked? store [:orders/of-shop {:shop/id shop-id}])  ; a fresher answer coming?

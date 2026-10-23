@@ -98,13 +98,14 @@ and [listening's numbers](decisions/2026-10-22-listening-s-numbers-are-settings.
   …})
 
 ;; the browser
-(def store (doorbell/make-question-store #(bridge/send-message! (:http addresses) shapes-by-name % {:wire wire :headers {}})
+(def store (doorbell/make-question-store #(bridge/send-message! (:http addresses) shapes-by-name % {:wire wire :headers {} :keep-alive? false})
                                          {:gather-changes-ms         50       ; changes heard together, one round of asking
                                           :keep-unwatched-answers-ms 300000})) ; an unwatched answer is kept this long
 (bridge/open-sse-line! (:sse addresses) (merge shapes-by-name doorbell/message-shapes-by-name)
                          (doorbell/make-sse-handlers store)
                          {:wire               wire
                           :on-open            #(when % (doorbell/hear-missed-changes! store))
+                          :on-break           nil                  ; or (fn []), once per break
                           :reconnect-after-ms sse-reconnect-after-ms})
 (def stop (doorbell/watch-question! store [:orders/of-shop {:shop/id shop-id}] show-orders!))
 ```

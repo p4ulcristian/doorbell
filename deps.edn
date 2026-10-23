@@ -8,12 +8,14 @@
   ;; the tables a handler's queries read
   ;; on its tidy-up branch, not released: a table map writes out :uniques and :checks,
   ;; a reference what it does on delete, update and when checked, an index as a map;
-  ;; migrate! takes {:tables :extensions :functions :views}
-  io.github.p4ulcristian/cellar   {:git/sha "d84e3e9feff9252f1cf9bacc255ae140deccb675"}
+  ;; migrate! takes {:tables :extensions :functions :views}; run-in-transaction! takes the
+  ;; caller's :log
+  io.github.p4ulcristian/cellar   {:git/sha "4396e6bc9353b8eb614c0db7b839da537d11863e"}
   ;; the sse lines a change is told on (each carries the app's wire), a handler's notes
   ;; on its tidy-up branch, not released: a refusal is a named reason, declared on its
-  ;; handler; answer-message counts every message on the app's meter
-  io.github.p4ulcristian/bridge {:git/sha "63451adbe42a6176074e1208ad4148e0eda19eab"}
+  ;; handler; answer-message counts every message on the app's meter; send-message! takes
+  ;; :keep-alive?, an sse line :on-break
+  io.github.p4ulcristian/bridge {:git/sha "8bdb927d950be3780088f2034fbc678597fcb49f"}
   ;; the app's meter, handed in: changes heard, lines told, whether it listens
   io.github.p4ulcristian/meter    {:git/tag "v0.1.4" :git/sha "bf81c46"}
   ;; the settings checked by their shapes

@@ -191,7 +191,7 @@
                 (is (= "{\"doorbell/changed\":{\"table\":\"shops\"}}" (read-next-data line-1)))
                 (is (= "{\"doorbell/changed\":{\"table\":\"shops\"}}" (read-next-data line-2))))
               (testing "one transaction's statements on one table ring once"
-                (cellar/run-in-transaction! app-pool {:read-only? false}
+                (cellar/run-in-transaction! app-pool {:read-only? false :log nil}
                                             (fn [transaction]
                                               (run-sql! transaction "INSERT INTO shops DEFAULT VALUES")
                                               (run-sql! transaction "UPDATE shops SET shop__id = shop__id")))
@@ -203,7 +203,7 @@
                 (run-sql! app-pool "DELETE FROM shops WHERE false")
                 (is (= :nothing (read-next-data line-1))))
               (testing "a rolled-back transaction rings nobody"
-                (try (cellar/run-in-transaction! app-pool {:read-only? false}
+                (try (cellar/run-in-transaction! app-pool {:read-only? false :log nil}
                                                  (fn [transaction]
                                                    (run-sql! transaction "INSERT INTO shops DEFAULT VALUES")
                                                    (throw (ex-info "roll back" {}))))

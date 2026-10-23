@@ -21,7 +21,7 @@
                         (js/Promise.resolve
                          (cond-> {message-name n}
                            (contains? tables-by-name message-name)
-                           (assoc :mailroom/notes {message-name {:tables (get tables-by-name message-name)}})))))}))
+                           (assoc :bridge/notes {message-name {:tables (get tables-by-name message-name)}})))))}))
 
 (defn- after-ms [ms f] (js/setTimeout f ms))
 
@@ -118,7 +118,7 @@
                answer!  (fn [] (let [[[message resolve]] @held]
                                  (swap! held subvec 1)
                                  (let [[message-name] (first message)]
-                                   (resolve {message-name 1 :mailroom/notes {message-name {:tables ["orders"]}}}))))
+                                   (resolve {message-name 1 :bridge/notes {message-name {:tables ["orders"]}}}))))
                store    (doorbell/make-question-store
                          (fn [message] (js/Promise. (fn [resolve _] (swap! held conj [message resolve]))))
                          settings)

@@ -55,8 +55,8 @@
 
 (def handler-shape
   "What put-table-notes-into-handlers reads of a handler: its
-   :run-steps-in, mailroom's, written out, nil to run the steps plainly.
-   The rest of the handler is mailroom's to check."
+   :run-steps-in, bridge's, written out, nil to run the steps plainly.
+   The rest of the handler is bridge's to check."
   [:map
    [:run-steps-in [:maybe fn?]]])
 

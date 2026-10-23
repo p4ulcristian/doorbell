@@ -7,10 +7,10 @@
    questions it shows; a change the server tells of asks again the watched
    questions whose answers were read from the changed table:
 
-     ;; wire is the app's (doorbell never makes one); mailroom takes it
-     (def store (doorbell/make-question-store #(mailroom/send-message! (:http addresses) shapes-by-name % {:wire wire :headers {}})
+     ;; wire is the app's (doorbell never makes one); bridge takes it
+     (def store (doorbell/make-question-store #(bridge/send-message! (:http addresses) shapes-by-name % {:wire wire :headers {}})
                                               {:gather-changes-ms 50 :keep-unwatched-answers-ms 300000}))
-     (mailroom/open-sse-line! (:sse addresses) (merge shapes-by-name doorbell/message-shapes-by-name)
+     (bridge/open-sse-line! (:sse addresses) (merge shapes-by-name doorbell/message-shapes-by-name)
                               (doorbell/make-sse-handlers store)
                               {:wire               wire
                                :on-open            #(when % (doorbell/hear-missed-changes! store))
@@ -24,14 +24,14 @@
    [doorbell.store :as store]))
 
 (def message-shapes-by-name
-  "The shapes of the server's two messages, for mailroom's shapes-by-name:
+  "The shapes of the server's two messages, for bridge's shapes-by-name:
    {:doorbell/changed {:table \"orders\"}} and {:doorbell/missed {}}."
   {:doorbell/changed {:params-shape nil :answer-shape [:map {:closed true} [:table :string]]}
    :doorbell/missed  {:params-shape nil :answer-shape [:map {:closed true}]}})
 
 (defn make-question-store
   "A store that asks through send-message!: (fn [message]) -> a promise of
-   the answer keyed by name, as mailroom's send-message! gives it. Settings,
+   the answer keyed by name, as bridge's send-message! gives it. Settings,
    every key required, checked first (:doorbell/bad-settings):
    :gather-changes-ms, how long changes are gathered before the questions
    they touch are asked again; :keep-unwatched-answers-ms, how long an

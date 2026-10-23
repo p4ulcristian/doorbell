@@ -31,13 +31,13 @@
                                               {:log    log      ; the app's (logbook's)
                                                :meter  meter    ; the app's (meter's)
                                                :tables tables}))   ; the app's table maps: the changes' set
-     ;; mailroom's :on-sse-open #(doorbell/add-sse-line! doorbell %),
+     ;; bridge's :on-sse-open #(doorbell/add-sse-line! doorbell %),
      ;;            :on-sse-close #(doorbell/remove-sse-line! doorbell %)
 
-   A line is told by the wire it carries, the app's, which mailroom's
+   A line is told by the wire it carries, the app's, which bridge's
    routes were made with: doorbell never makes a wire. Nor a log: the
    listener writes to the one start-listening! is handed, and the notes
-   are taken with the message's own, :mailroom/log, so a query whose
+   are taken with the message's own, :bridge/log, so a query whose
    tables Postgres can't say is written with the request's id.
 
    start-listening! declares doorbell's metrics on the app's meter, its
@@ -47,7 +47,7 @@
    counts its reconnects."
   (:require
    [cellar.api :as cellar]
-   [mailroom.api :as mailroom]
+   [bridge.api :as bridge]
    [doorbell.metrics :as metrics]
    [doorbell.settings :as settings]
    [doorbell.tables :as tables]
@@ -101,8 +101,8 @@
   {:tables (if (= :unknown tables) "any" (vec (sort (map turn-key-into-text tables))))})
 
 (defn- run-and-note-tables [run context]
-  (let [[context tables] (cellar/run-and-list-tables-read {:log (:mailroom/log context)} #(run context))]
-    (assoc context :mailroom/notes (turn-tables-into-notes tables))))
+  (let [[context tables] (cellar/run-and-list-tables-read {:log (:bridge/log context)} #(run context))]
+    (assoc context :bridge/notes (turn-tables-into-notes tables))))
 
 (defn- run-plainly [run context]
   (run context))
@@ -110,10 +110,10 @@
 (defn put-table-notes-into-handlers
   "Every handler's answer gets a note of the tables its steps read,
    {:tables [\"orders\" \"shops\"]}, or {:tables \"any\"} when Postgres's
-   planner couldn't say for one of its queries; mailroom sends it beside
+   planner couldn't say for one of its queries; bridge sends it beside
    the answer. Only the steps count, not what runs around them in the
    handler's :run-steps-in (a session, who holds what): the notes are
-   taken inside it, with the message's log (mailroom's :mailroom/log), which
+   taken inside it, with the message's log (bridge's :bridge/log), which
    a query the planner can't say is written to. Every handler writes out
    :run-steps-in, nil to run the steps plainly; one that leaves it out
    refuses (:doorbell/bad-handlers)."
@@ -131,14 +131,14 @@
 
 (defn add-sse-line!
   "Keeps an sse line that has just opened, to tell of changes. For
-   mailroom's :on-sse-open."
+   bridge's :on-sse-open."
   [{:keys [lines]} line]
-  (swap! lines assoc (:mailroom/channel line) line))
+  (swap! lines assoc (:bridge/channel line) line))
 
 (defn remove-sse-line!
-  "Forgets a line that has closed. For mailroom's :on-sse-close."
+  "Forgets a line that has closed. For bridge's :on-sse-close."
   [{:keys [lines]} line]
-  (swap! lines dissoc (:mailroom/channel line)))
+  (swap! lines dissoc (:bridge/channel line)))
 
 (defn- tell-every-line!
   "Tells every open line the message; counts how many were told, as
@@ -146,7 +146,7 @@
   [{:keys [lines meter]} message-kind message]
   (let [open-lines (vals @lines)]
     (doseq [line open-lines]
-      (mailroom/send-message-on-sse-line! line message nil))
+      (bridge/send-message-on-sse-line! line message nil))
     (metrics/count-tells! meter message-kind (count open-lines))))
 
 (defn- tell-of-notifications! [{:keys [meter] :as doorbell} notifications]

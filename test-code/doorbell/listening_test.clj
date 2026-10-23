@@ -13,7 +13,7 @@
    [doorbell.api :as doorbell]
    [jsonista.core :as json]
    [logbook.api :as logbook]
-   [mailroom.api :as mailroom]
+   [bridge.api :as bridge]
    [meter.api :as meter]
    [wire.api :as wire])
   (:import
@@ -24,7 +24,7 @@
 (def ^:private port (some-> (System/getenv "DOORBELL_TEST_PORT") parse-long))
 
 (def ^:private test-wire
-  "The tests' wire, made as an app makes its own and hands to mailroom
+  "The tests' wire, made as an app makes its own and hands to bridge
    (the values wire v0.1 had in effect); doorbell never makes one."
   (wire/make-wire-from-settings
    {:most-shapes-kept 1000
@@ -76,7 +76,8 @@
 
 (def ^:private server-settings
   {:ip "127.0.0.1" :port 0 :proxy-protocol :disable :client-address-header nil :server-header nil
-   :max-body-bytes 8388608 :max-header-line-bytes 8192 :max-ws-message-bytes 4194304
+   :max-body-bytes 8388608 :max-request-head-bytes 8192 :max-ws-message-bytes 4194304
+   :idle-timeout-ms 60000 :threads {:min 8 :max 50 :idle-timeout-ms 60000}
    :addresses {:http "/mail/http" :sse "/mail/sse" :ws "/mail/ws"}
    :ping-every-ms 25000 :sse-reconnect-after-ms 3000 :ws-reopen-after-ms 1000
    :stop-wait-ms 1000 :stop-wait-after-cut-ms 1000
@@ -155,17 +156,17 @@
       (try
         (make-database! owner-pool)
         (let [app-pool (start-pool! "doorbell_app")
-              ;; one meter for the app: the pool's, mailroom's and doorbell's metrics
+              ;; one meter for the app: the pool's, bridge's and doorbell's metrics
               app-meter (:cellar/meter app-pool)
               doorbell (doorbell/start-listening! app-pool listening-settings {:log log :meter app-meter :tables [shops logs]})
-              server   (mailroom/start-server!
-                        (mailroom/make-ring-handler-from-routes
-                         (mailroom/make-routes-for-messages
+              server   (bridge/start-server!
+                        (bridge/make-ring-handler-from-routes
+                         (bridge/make-routes-for-messages
                           (doorbell/put-table-notes-into-handlers handlers) server-settings
                           {:wire                test-wire
                            :log                 log
                            :meter               app-meter
-                           :find-rate-limit-key #(mailroom/find-client-address % nil)
+                           :find-rate-limit-key #(bridge/find-client-address % nil)
                            :on-sse-open #(doorbell/add-sse-line! doorbell %) :on-sse-close #(doorbell/remove-sse-line! doorbell %)
                            :on-ws-open nil :on-ws-close nil})
                          {:files nil})
@@ -220,18 +221,18 @@
               (let [ready (doorbell/put-table-notes-into-handlers
                            {:shops/all {:params-shape nil :answer-shape nil :rate-limit nil :run-steps-in nil
                                         :steps [{:name  :answer-shops
-                                                 :enter #(mailroom/add-answer-to-context % (count (cellar/find-rows app-pool find-shops {})))}]}})]
-                (is (= {:shops/all 2 :mailroom/notes {:shops/all {:tables ["shops"]}}}
-                       (mailroom/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire :log log})))))
+                                                 :enter #(bridge/add-answer-to-context % (count (cellar/find-rows app-pool find-shops {})))}]}})]
+                (is (= {:shops/all 2 :bridge/notes {:shops/all {:tables ["shops"]}}}
+                       (bridge/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire :log log})))))
             (testing "a query whose tables the planner can't say: written to the message's log, with its request id"
               (reset! lines [])
               (let [ready (doorbell/put-table-notes-into-handlers
                            {:shops/all {:params-shape nil :answer-shape nil :rate-limit nil :run-steps-in nil
                                         :steps [{:name  :ask-untyped
-                                                 :enter #(mailroom/add-answer-to-context
+                                                 :enter #(bridge/add-answer-to-context
                                                           % (:b (cellar/find-one-row app-pool (query "SELECT :x IS NULL AS b") {:x "a"})))}]}})]
-                (is (= {:shops/all false :mailroom/notes {:shops/all {:tables "any"}}}
-                       (mailroom/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire :log log})))
+                (is (= {:shops/all false :bridge/notes {:shops/all {:tables "any"}}}
+                       (bridge/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire :log log})))
                 (let [[line] (filter #(= "cellar/tables-read-unknown" (get % "event")) @lines)]
                   (is (= "warn" (get line "level")))
                   (is (some? (get-in line ["context" "request-id"]))))))
@@ -243,12 +244,12 @@
                                                          (swap! around conj :before)
                                                          (cellar/find-rows app-pool (query "SELECT log__id FROM logs") {})
                                                          (run context))
-                                         :steps [{:name :answer :enter #(mailroom/add-answer-to-context % 0)}]}})]
-                (is (= {:shops/all {:tables []}} (:mailroom/notes (mailroom/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire :log log})))
+                                         :steps [{:name :answer :enter #(bridge/add-answer-to-context % 0)}]}})]
+                (is (= {:shops/all {:tables []}} (:bridge/notes (bridge/answer-message ready :no-rate-limits {} {:shops/all {}} {:wire test-wire :log log})))
                     "logs, read around the steps, isn't noted")
                 (is (= [:before] @around))))
             (finally
-              (mailroom/stop-server! server)
+              (bridge/stop-server! server)
               (is (true? (doorbell/stop-listening! doorbell)) "the listener ended within its :stop-wait-ms")
               (is (= ["doorbell_listening 0"] (find-metric-lines app-meter "doorbell_listening")) "not once stopped")
               (cellar/stop-pool! app-pool))))

@@ -22,7 +22,7 @@
 
 (defn make-store
   "A store asking through send-message!, (fn [message]) -> a promise of the
-   answer, keyed by name, with :mailroom/notes beside it; settings checked
+   answer, keyed by name, with :bridge/notes beside it; settings checked
    already."
   [send-message! {:keys [gather-changes-ms keep-unwatched-answers-ms]}]
   {:send-message!             send-message!
@@ -57,7 +57,7 @@
   "The tables the server's notes say the answer was read from; \"any\"
    when it sent none."
   [answer message-name]
-  (let [tables (get-in answer [:mailroom/notes message-name :tables])]
+  (let [tables (get-in answer [:bridge/notes message-name :tables])]
     (if (some? tables) tables "any")))
 
 (defn ask!

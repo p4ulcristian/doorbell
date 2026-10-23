@@ -8,7 +8,7 @@
    The tables' set is the ones that tell (:doorbell :tell) of
    start-listening!'s :tables. A break in listening is counted by cellar's
    listener, on the same meter (cellar_listening_reconnects_total); the
-   open lines by mailroom (mailroom_open_lines)."
+   open lines by bridge (bridge_open_lines)."
   (:require
    [cellar.api :as cellar]
    [meter.api :as meter]))

@@ -15,7 +15,7 @@ io.github.p4ulcristian/doorbell {:git/tag "v0.5.5" :git/sha "d8ca07f"}
 
 Needs [cellar](https://github.com/p4ulcristian/cellar) (Postgres: the
 trigger's function, listening, the tables a query reads) and
-[mailroom](https://github.com/p4ulcristian/mailroom) (the sse lines, a
+[bridge](https://github.com/p4ulcristian/bridge) (the sse lines, a
 handler's notes, the browser's messages),
 [meter](https://github.com/p4ulcristian/meter) (the app's metrics, handed
 in), malli (the settings checked) and jsonista (Postgres's change messages
@@ -24,11 +24,11 @@ read). One public namespace,
 
 doorbell never makes a [wire](https://github.com/p4ulcristian/wire) and
 takes none: an sse line is told by the wire it carries, the app's, which
-mailroom's routes were made with; in the browser the app's `send-message!`
-and `open-sse-line!` calls hand mailroom the app's wire. Nor a log:
+bridge's routes were made with; in the browser the app's `send-message!`
+and `open-sse-line!` calls hand bridge the app's wire. Nor a log:
 `start-listening!` takes the app's under `:log` in a new options map, for
 cellar's listener, and the notes are taken with the message's own,
-mailroom's `:mailroom/log` ([why](decisions/2026-10-22-the-app-passes-its-log.md)).
+bridge's `:bridge/log` ([why](decisions/2026-10-22-the-app-passes-its-log.md)).
 
 `start-listening!` takes the app's meter under `:meter`, and the app's
 table maps under `:tables`, and declares doorbell's metrics
@@ -37,7 +37,7 @@ table maps under `:tables`, and declares doorbell's metrics
 as the set (another is `"other"`); `doorbell_tells_total{message}`, each
 `changed` or `missed` message written to a line; `doorbell_listening`, 1
 while the listener listens. It hands the meter to cellar's listener, which
-counts a break (`cellar_listening_reconnects_total`); mailroom counts the
+counts a break (`cellar_listening_reconnects_total`); bridge counts the
 open lines.
 
 ## The api
@@ -46,11 +46,11 @@ open lines.
 |---|---|---|
 | server | `install-tell-function!` | `doorbell.tell()`, which the triggers call; as the owner, before migrate |
 | server | `check-doorbell-of-tables` `put-doorbell-on-tables` | every table map says `:doorbell :tell` or `[:silent "why"]`; one that tells gets its triggers (cellar's `:on-change`), a silent one `:on-change nil` |
-| server | `put-table-notes-into-handlers` | every answer notes the tables its steps read (`:mailroom/notes`) |
+| server | `put-table-notes-into-handlers` | every answer notes the tables its steps read (`:bridge/notes`) |
 | server | `listening-settings-shape` `start-listening!` `stop-listening!` | listens on the channel `doorbell`, tells every open line; its batch window, waits and reconnect delay are required settings, the app's log, meter and tables required options |
-| server | `add-sse-line!` `remove-sse-line!` `count-open-lines` | for mailroom's `:on-sse-open` and `:on-sse-close` |
+| server | `add-sse-line!` `remove-sse-line!` `count-open-lines` | for bridge's `:on-sse-open` and `:on-sse-close` |
 | both | `store-settings-shape` | the question store's settings, every key required |
-| browser | `make-question-store` | answers kept by question, `[name params]`, asked through mailroom's `send-message!` |
+| browser | `make-question-store` | answers kept by question, `[name params]`, asked through bridge's `send-message!` |
 | browser | `watch-question!` `ask-question-again!` `find-kept-answer` | a screen watches what it shows; asked now, and again when a table it read changes |
 | browser | `is-question-being-asked?` | whether a fresher answer is on its way: out now, or a gathered change will ask it |
 | browser | `hear-changed-table!` | a table changed, told by the browser itself (a write's answer): gathered, then what read it is asked again |
@@ -81,21 +81,21 @@ and [listening's numbers](decisions/2026-10-22-listening-s-numbers-are-settings.
                                      {:log    log                        ; the app's: a break in listening is written to it
                                       :meter  meter                      ; the app's: changes heard, lines told, listening
                                       :tables [orders logs]}))           ; the tables that tell are the changes' set
-(mailroom/make-routes-for-messages
+(bridge/make-routes-for-messages
  (doorbell/put-table-notes-into-handlers handlers)   ; each writes out :run-steps-in, nil for none
  settings
  {:wire         wire                                  ; the app's; each line carries it
   :log          log                                   ; the app's; each message's steps get one with its request id
-  :meter        meter                                 ; the app's; mailroom's metrics
+  :meter        meter                                 ; the app's; bridge's metrics
   :on-sse-open  #(doorbell/add-sse-line! bell %)
   :on-sse-close #(doorbell/remove-sse-line! bell %)
   …})
 
 ;; the browser
-(def store (doorbell/make-question-store #(mailroom/send-message! (:http addresses) shapes-by-name % {:wire wire :headers {}})
+(def store (doorbell/make-question-store #(bridge/send-message! (:http addresses) shapes-by-name % {:wire wire :headers {}})
                                          {:gather-changes-ms         50       ; changes heard together, one round of asking
                                           :keep-unwatched-answers-ms 300000})) ; an unwatched answer is kept this long
-(mailroom/open-sse-line! (:sse addresses) (merge shapes-by-name doorbell/message-shapes-by-name)
+(bridge/open-sse-line! (:sse addresses) (merge shapes-by-name doorbell/message-shapes-by-name)
                          (doorbell/make-sse-handlers store)
                          {:wire               wire
                           :on-open            #(when % (doorbell/hear-missed-changes! store))

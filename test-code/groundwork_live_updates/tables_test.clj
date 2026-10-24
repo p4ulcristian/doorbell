@@ -28,13 +28,16 @@
     (is (= :groundwork-live-updates/bad-settings type) "refused before it listens")
     (is (= #{:check-stopped-every-ms :reconnect-after-ms :stop-wait-ms :stop-wiat-ms} (set (keys errors))))))
 
-(deftest the-listening-options-take-the-apps-log-meter-and-tables
+(deftest the-listening-options-take-the-apps-log-meter-tables-and-lines
   (let [{:keys [type errors]} (try (live-updates/start-listening! nil {:batch-window-ms 50 :check-stopped-every-ms 500
                                                                    :reconnect-after-ms 1000 :stop-wait-ms 2000}
                                                               {})
                                    (catch clojure.lang.ExceptionInfo e (ex-data e)))]
     (is (= :groundwork-live-updates/bad-options type))
-    (is (= {:log ["missing required key"] :meter ["missing required key"] :tables ["missing required key"]} errors))))
+    (is (= {:log ["missing required key"] :meter ["missing required key"] :tables ["missing required key"]
+            :push! ["missing required key"] :find-line-key ["missing required key"]}
+           errors)
+        "how a line is told and told apart is the app's wire's, handed in")))
 
 (deftest a-batch-tells-each-changed-table-once
   (let [tables (telling/list-changed-tables

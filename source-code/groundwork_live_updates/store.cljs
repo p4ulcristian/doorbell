@@ -15,20 +15,22 @@
      before the handler's steps ran).
    - An answer no screen watches is kept :keep-unwatched-answers-ms, then
      dropped.
-   - An ask whose send-message! fails is answered bridge's own refusal for
-     no answer, {:groundwork-bridge/refused :groundwork-bridge/no-answer :groundwork-bridge/data
-     {:http-status nil}}, as bridge's send-message! answers a request that got no
-     response; that one never fails, so this comes only when the app's own
-     send function does.")
+   - An ask whose send-message! fails is answered groundwork-steps's refusal
+     for no answer, {:groundwork-steps/refused :groundwork-steps/no-answer
+     :groundwork-steps/data {:http-status nil}}, as groundwork-bridge's
+     send-message! answers a request that got no response; that one never
+     fails, so this comes only when the app's own send function does."
+  (:require
+   [groundwork-steps.api :as steps]))
 
 (def ^:private no-answer
-  "bridge's :groundwork-bridge/no-answer, no response at all: no request id, since no
-   server sent it."
-  {:groundwork-bridge/refused :groundwork-bridge/no-answer :groundwork-bridge/data {:http-status nil}})
+  "groundwork-steps's :groundwork-steps/no-answer, no response at all: no
+   request id, since no server sent it."
+  (steps/make-refusal :groundwork-steps/no-answer {:http-status nil}))
 
 (defn make-store
   "A store asking through send-message!, (fn [message]) -> a promise of the
-   answer, keyed by name, with :groundwork-bridge/notes beside it; settings checked
+   answer, keyed by name, with :groundwork-steps/notes beside it; settings checked
    already."
   [send-message! {:keys [gather-changes-ms keep-unwatched-answers-ms]}]
   {:send-message!             send-message!
@@ -63,7 +65,7 @@
   "The tables the server's notes say the answer was read from; \"any\"
    when it sent none."
   [answer message-name]
-  (let [tables (get-in answer [:groundwork-bridge/notes message-name :tables])]
+  (let [tables (get-in answer [:groundwork-steps/notes message-name :tables])]
     (if (some? tables) tables "any")))
 
 (defn ask!

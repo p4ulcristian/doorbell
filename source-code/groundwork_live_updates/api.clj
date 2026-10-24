@@ -33,16 +33,22 @@
                                                     :check-stopped-every-ms 500
                                                     :reconnect-after-ms     1000
                                                     :stop-wait-ms           2000}
-                                              {:log    log      ; the app's (groundwork-logs's)
-                                               :meter  meter    ; the app's (groundwork-metrics's)
-                                               :tables tables}))   ; the app's table maps: the changes' set
-     ;; bridge's :on-sse-open #(live-updates/add-sse-line! groundwork-live-updates %),
-     ;;            :on-sse-close #(live-updates/remove-sse-line! groundwork-live-updates %)
+                                              {:log           log      ; the app's (groundwork-logs's)
+                                               :meter         meter    ; the app's (groundwork-metrics's)
+                                               :tables        tables   ; the app's table maps: the changes' set
+                                               ;; the app's lines: how one is told a message, and what tells it apart
+                                               :push!         #(bridge/send-message-on-sse-line! %1 %2 nil)
+                                               :find-line-key :groundwork-bridge/channel}))
+     ;; the line's opening and closing, the app's sse hooks:
+     ;;   #(live-updates/add-sse-line! groundwork-live-updates %), #(live-updates/remove-sse-line! groundwork-live-updates %)
 
-   A line is told by the shaper it carries, the app's, which bridge's
-   routes were made with: groundwork-live-updates never makes a shaper. Nor a log: the
-   listener writes to the one start-listening! is handed, and the notes
-   are taken with the message's own, :groundwork-bridge/log, so a query whose
+   groundwork-live-updates opens no line and writes on none itself: the
+   app hands start-listening! how a line is told a message (:push!), and
+   how lines are told apart (:find-line-key), so it never needs the wire
+   (groundwork's: groundwork-bridge's sse lines, each told by the shaper it
+   carries). Nor does it make a shaper or a log: the listener writes to the
+   one start-listening! is handed, and the notes are taken with the
+   message's own, groundwork-steps's :groundwork-steps/log, so a query whose
    tables Postgres can't say is written with the request's id.
 
    start-listening! declares groundwork-live-updates's metrics on the app's meter, its
@@ -52,7 +58,6 @@
    counts its reconnects."
   (:require
    [groundwork-postgres.api :as postgres]
-   [groundwork-bridge.api :as bridge]
    [groundwork-live-updates.metrics :as metrics]
    [groundwork-live-updates.settings :as settings]
    [groundwork-live-updates.tables :as tables]
@@ -105,8 +110,8 @@
   {:tables (if (= :unknown tables) "any" (vec (sort (map turn-key-into-text tables))))})
 
 (defn- run-and-note-tables [run context]
-  (let [[context tables] (postgres/run-and-list-tables-read {:log (:groundwork-bridge/log context)} #(run context))]
-    (assoc context :groundwork-bridge/notes (turn-tables-into-notes tables))))
+  (let [[context tables] (postgres/run-and-list-tables-read {:log (:groundwork-steps/log context)} #(run context))]
+    (assoc context :groundwork-steps/notes (turn-tables-into-notes tables))))
 
 (defn- run-plainly [run context]
   (run context))
@@ -114,10 +119,11 @@
 (defn put-table-notes-into-handlers
   "Every handler's answer gets a note of the tables its steps read,
    {:tables [\"orders\" \"shops\"]}, or {:tables \"any\"} when Postgres's
-   planner couldn't say for one of its queries; bridge sends it beside
-   the answer. Only the steps count, not what runs around them in the
+   planner couldn't say for one of its queries, at :groundwork-steps/notes
+   in the context, which the runner (groundwork-bridge) sends beside the
+   answer. Only the steps count, not what runs around them in the
    handler's :run-steps-in (a session, who holds what): the notes are
-   taken inside it, with the message's log (bridge's :groundwork-bridge/log), which
+   taken inside it, with the message's log (:groundwork-steps/log), which
    a query the planner can't say is written to. Every handler writes out
    :run-steps-in, nil to run the steps plainly; one that leaves it out
    refuses (:groundwork-live-updates/bad-handlers)."
@@ -134,23 +140,24 @@
 ;; Lines and listening
 
 (defn add-sse-line!
-  "Keeps an sse line that has just opened, to tell of changes. For
-   bridge's :on-sse-open."
-  [{:keys [lines]} line]
-  (swap! lines assoc (:groundwork-bridge/channel line) line))
+  "Keeps an sse line that has just opened, to tell of changes, under its
+   key (the options' :find-line-key). For the app's sse open hook."
+  [{:keys [lines find-line-key]} line]
+  (swap! lines assoc (find-line-key line) line))
 
 (defn remove-sse-line!
-  "Forgets a line that has closed. For bridge's :on-sse-close."
-  [{:keys [lines]} line]
-  (swap! lines dissoc (:groundwork-bridge/channel line)))
+  "Forgets a line that has closed, by its key. For the app's sse close
+   hook."
+  [{:keys [lines find-line-key]} line]
+  (swap! lines dissoc (find-line-key line)))
 
 (defn- tell-every-line!
-  "Tells every open line the message; counts how many were told, as
-   message-kind (:changed or :missed)."
-  [{:keys [lines meter]} message-kind message]
+  "Tells every open line the message, by the options' :push!; counts how
+   many were told, as message-kind (:changed or :missed)."
+  [{:keys [lines meter push!]} message-kind message]
   (let [open-lines (vals @lines)]
     (doseq [line open-lines]
-      (bridge/send-message-on-sse-line! line message nil))
+      (push! line message))
     (metrics/count-tells! meter message-kind (count open-lines))))
 
 (defn- tell-of-notifications! [{:keys [meter] :as live-updates} notifications]
@@ -171,7 +178,12 @@
    app's meter, which groundwork-live-updates's metrics are declared on and counted into
    (groundwork-live-updates.metrics), and groundwork-postgres's listener counts its reconnects on;
    :tables, the app's table maps, as put-live-updates-on-tables takes them,
-   whose telling ones are the changes' set:
+   whose telling ones are the changes' set; :push!, (fn [line message]),
+   how an open line is told a message, written on it at once (groundwork's:
+   groundwork-bridge's send-message-on-sse-line! with no id); :find-line-key,
+   (fn [line]), what tells one line from another, the key add-sse-line! keeps
+   it under and remove-sse-line! forgets it by (groundwork's: the line's
+   :groundwork-bridge/channel):
 
      {:batch-window-ms        50     ; after the first change, how long more join its batch
       :check-stopped-every-ms 500    ; one wait for a change, before looking whether it was stopped
@@ -183,9 +195,9 @@
   [pool settings options]
   (settings/check-listening-settings settings)
   (settings/check-listening-options options)
-  (let [{:keys [log meter tables]} options
+  (let [{:keys [log meter tables push! find-line-key]} options
         listener-holder (atom nil)
-        live-updates        {:lines (atom {}) :meter meter}]
+        live-updates        {:lines (atom {}) :meter meter :push! push! :find-line-key find-line-key}]
     (tables/check-live-updates-of-tables tables)
     ;; and a meter meter didn't make is refused here (:groundwork-metrics/not-a-meter)
     (metrics/declare-metrics! meter tables listener-holder)

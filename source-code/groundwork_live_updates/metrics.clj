@@ -8,7 +8,7 @@
    The tables' set is the ones that tell (:live-updates :tell) of
    start-listening!'s :tables. A break in listening is counted by groundwork-postgres's
    listener, on the same meter (groundwork_postgres_listening_reconnects_total); the
-   open lines by bridge (groundwork_bridge_open_lines)."
+   open lines by the wire (groundwork-bridge's groundwork_bridge_open_lines)."
   (:require
    [groundwork-postgres.api :as postgres]
    [groundwork-metrics.api :as metrics]))

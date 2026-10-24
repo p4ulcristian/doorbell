@@ -1,5 +1,7 @@
 # doorbell takes no wire: lines carry the app's, Postgres's messages are read with jsonista
 
+> **Changed in part** by [groundwork-live-updates requires no wire](2026-10-24-groundwork-live-updates-requires-no-wire.md) (2026-10-24): it requires no wire library either; how a line is told a message is the app's `:push!`.
+
 > **Changed in part** by [The family and its composer are groundwork](https://github.com/p4ulcristian/groundwork/blob/Starting-from-the-bottom/decisions/2026-10-23-the-family-and-its-composer-are-groundwork.md) (2026-10-23): manor, the family, and house, the composer, are both named groundwork now.
 
 > Changes in part [doorbell is its own library](2026-10-22-doorbell-is-its-own-library.md) (what it needs). Since v0.2.0, on mailroom v0.2.0.

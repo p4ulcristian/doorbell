@@ -21,7 +21,7 @@
                         (js/Promise.resolve
                          (cond-> {message-name n}
                            (contains? tables-by-name message-name)
-                           (assoc :groundwork-bridge/notes {message-name {:tables (get tables-by-name message-name)}})))))}))
+                           (assoc :groundwork-steps/notes {message-name {:tables (get tables-by-name message-name)}})))))}))
 
 (defn- after-ms [ms f] (js/setTimeout f ms))
 
@@ -81,8 +81,8 @@
            (live-updates/watch-question! store [:orders/all {}] #(swap! heard conj %))
            (after-ms 10
                      (fn []
-                       (is (= [{:groundwork-bridge/refused :groundwork-bridge/no-answer :groundwork-bridge/data {:http-status nil}}] @heard)
-                           "bridge's own refusal for no response, no request id")
+                       (is (= [{:groundwork-steps/refused :groundwork-steps/no-answer :groundwork-steps/data {:http-status nil}}] @heard)
+                           "groundwork-steps's refusal for no response, no request id")
                        (done))))))
 
 (deftest the-store-says-its-settings
@@ -93,7 +93,7 @@
     (is (= #{:keep-unwatched-answers-ms} (set (keys (:errors problems)))))))
 
 (deftest the-messages-have-their-shapes
-  (testing "the three shapes for each of the server's two messages, as bridge takes them"
+  (testing "the three shapes for each of the server's two messages, as the wire (groundwork-bridge) takes them"
     (is (= #{:groundwork-live-updates/changed :groundwork-live-updates/missed} (set (keys live-updates/message-shapes-by-name))))
     (is (every? #(= #{:params-shape :answer-shape :refusals} (set (keys %))) (vals live-updates/message-shapes-by-name)))
     (is (every? #(= {} (:refusals %)) (vals live-updates/message-shapes-by-name)) "never refused")))
@@ -120,7 +120,7 @@
                answer!  (fn [] (let [[[message resolve]] @held]
                                  (swap! held subvec 1)
                                  (let [[message-name] (first message)]
-                                   (resolve {message-name 1 :groundwork-bridge/notes {message-name {:tables ["orders"]}}}))))
+                                   (resolve {message-name 1 :groundwork-steps/notes {message-name {:tables ["orders"]}}}))))
                store    (live-updates/make-question-store
                          (fn [message] (js/Promise. (fn [resolve _] (swap! held conj [message resolve]))))
                          settings)

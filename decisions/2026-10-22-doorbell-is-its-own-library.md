@@ -1,5 +1,7 @@
 # doorbell is its own library
 
+> **Changed in part** by [groundwork-live-updates requires no wire](2026-10-24-groundwork-live-updates-requires-no-wire.md) (2026-10-24): it needs groundwork-postgres, groundwork-steps, groundwork-metrics, malli and jsonista, not groundwork-bridge; `start-listening!` is handed `:push!` and `:find-line-key`.
+
 > **Changed in part** by [An ask with no answer is bridge's :bridge/no-answer refusal](2026-10-23-an-ask-with-no-answer-is-bridges-no-answer-refusal.md) (2026-10-23, built on tidy-up, not released): a failed send answers `{:bridge/refused :bridge/no-answer :bridge/data {:http-status nil}}`, not `{:error "No answer from the server."}`.
 
 > **Changed in part** by [doorbell takes no wire](2026-10-22-doorbell-takes-no-wire.md) (2026-10-22, v0.2.0): doorbell needs cellar, mailroom, malli and jsonista; it takes no wire, and reads Postgres's change messages with jsonista.

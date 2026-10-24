@@ -1,5 +1,7 @@
 # An ask with no answer is bridge's :bridge/no-answer refusal
 
+> **Changed in part** by [groundwork-live-updates requires no wire](2026-10-24-groundwork-live-updates-requires-no-wire.md) (2026-10-24): the refusal is groundwork-steps's, `{:groundwork-steps/refused :groundwork-steps/no-answer :groundwork-steps/data {:http-status nil}}`.
+
 > Follows bridge's [A refusal is a named reason, declared on its handler](https://github.com/p4ulcristian/bridge/blob/tidy-up/decisions/2026-10-23-a-refusal-is-a-named-reason-declared-on-its-handler.md) (the user's decision, 2026-10-23), which left doorbell's store for later. Changes in part [doorbell is its own library](2026-10-22-doorbell-is-its-own-library.md). Built on tidy-up, not released.
 
 **Decision:** when the app's `send-message!` fails, the store answers the question with bridge's own refusal for no response, not with an English text:

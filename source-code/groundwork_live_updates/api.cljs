@@ -7,7 +7,8 @@
    questions it shows; a change the server tells of asks again the watched
    questions whose answers were read from the changed table:
 
-     ;; groundwork-shaped-json is the app's (groundwork-live-updates never makes one); bridge takes it
+     ;; the app plugs the store into its wire (groundwork does, with groundwork-bridge):
+     ;; the send and the sse line are the app's, and so is the shaper they take
      (def store (live-updates/make-question-store #(bridge/send-message! (:http addresses) shapes-by-name % {:shaper groundwork-shaped-json :headers {} :keep-alive? false})
                                               {:gather-changes-ms 50 :keep-unwatched-answers-ms 300000}))
      (bridge/open-sse-line! (:sse addresses) (merge shapes-by-name live-updates/message-shapes-by-name)
@@ -25,7 +26,8 @@
    [groundwork-live-updates.store :as store]))
 
 (def message-shapes-by-name
-  "The shapes of the server's two messages, for bridge's shapes-by-name:
+  "The shapes of the server's two messages, for the wire's shapes-by-name
+   (groundwork-bridge's):
    {:groundwork-live-updates/changed {:table \"orders\"}} and {:groundwork-live-updates/missed {}};
    neither is ever refused, so their :refusals are {}."
   {:groundwork-live-updates/changed {:params-shape nil :answer-shape [:map {:closed true} [:table :string]] :refusals {}}
@@ -33,7 +35,8 @@
 
 (defn make-question-store
   "A store that asks through send-message!: (fn [message]) -> a promise of
-   the answer keyed by name, as bridge's send-message! gives it. Settings,
+   the answer keyed by name, with groundwork-steps's :groundwork-steps/notes
+   beside it, as groundwork-bridge's send-message! gives it. Settings,
    every key required, checked first (:groundwork-live-updates/bad-settings):
    :gather-changes-ms, how long changes are gathered before the questions
    they touch are asked again; :keep-unwatched-answers-ms, how long an

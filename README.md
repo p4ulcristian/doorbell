@@ -15,20 +15,24 @@ io.github.p4ulcristian/groundwork-live-updates {:git/tag "v0.5.10" :git/sha "170
 
 Needs [groundwork-postgres](https://github.com/p4ulcristian/groundwork-postgres) (Postgres: the
 trigger's function, listening, the tables a query reads) and
-[groundwork-bridge](https://github.com/p4ulcristian/groundwork-bridge) (the sse lines, a
-handler's notes, the browser's messages),
+[groundwork-steps](https://github.com/p4ulcristian/groundwork-steps) (a handler's notes and the
+message's log in its steps' context, the browser's no-answer refusal),
 [groundwork-metrics](https://github.com/p4ulcristian/groundwork-metrics) (the app's metrics, handed
 in), malli (the settings checked) and jsonista (Postgres's change messages
 read). One public namespace,
 `groundwork-live-updates.api`: a `.clj` for the server, a `.cljs` for the browser.
 
-groundwork-live-updates never makes a [groundwork-shaped-json](https://github.com/p4ulcristian/groundwork-shaped-json) and
-takes none: an sse line is told by the shaper it carries, the app's, which
-bridge's routes were made with; in the browser the app's `send-message!`
-and `open-sse-line!` calls hand bridge the app's shaper. Nor a log:
-`start-listening!` takes the app's under `:log` in a new options map, for
-groundwork-postgres's listener, and the notes are taken with the message's own,
-bridge's `:groundwork-bridge/log` ([why](decisions/2026-10-22-the-app-passes-its-log.md)).
+groundwork-live-updates requires no wire: it opens no line and writes on
+none itself. `start-listening!` is handed, in its options, how an open line
+is told a message (`:push!`, `(fn [line message])`) and what tells one line
+from another (`:find-line-key`, `(fn [line])`), and the browser's store is
+handed the app's send; the app plugs them into its wire (groundwork does,
+with groundwork-bridge's sse lines and `send-message!`;
+[why](decisions/2026-10-24-groundwork-live-updates-requires-no-wire.md)). So it
+never makes a [groundwork-shaped-json](https://github.com/p4ulcristian/groundwork-shaped-json)
+and takes none. Nor a log: `start-listening!` takes the app's under `:log`,
+for groundwork-postgres's listener, and the notes are taken with the
+message's own, `:groundwork-steps/log` ([why](decisions/2026-10-22-the-app-passes-its-log.md)).
 
 `start-listening!` takes the app's meter under `:meter`, and the app's
 table maps under `:tables`, and declares groundwork-live-updates's metrics
@@ -37,8 +41,8 @@ table maps under `:tables`, and declares groundwork-live-updates's metrics
 as the set (another is `"other"`); `groundwork_live_updates_tells_total{message}`, each
 `changed` or `missed` message written to a line; `groundwork_live_updates_listening`, 1
 while the listener listens. It hands the meter to groundwork-postgres's listener, which
-counts a break (`groundwork_postgres_listening_reconnects_total`); bridge counts the
-open lines.
+counts a break (`groundwork_postgres_listening_reconnects_total`); the wire counts the
+open lines (groundwork-bridge's `groundwork_bridge_open_lines`).
 
 ## The api
 
@@ -46,11 +50,11 @@ open lines.
 |---|---|---|
 | server | `function-files` | the `.sql` file of `groundwork_live_updates.tell()`, which the triggers call, for groundwork-postgres's `:functions` beside the app's own |
 | server | `check-live-updates-of-tables` `put-live-updates-on-tables` | every table map says `:live-updates :tell` or `[:silent "why"]`; one that tells gets its triggers (groundwork-postgres's `:on-change`), a silent one `:on-change nil` |
-| server | `put-table-notes-into-handlers` | every answer notes the tables its steps read (`:groundwork-bridge/notes`) |
-| server | `listening-settings-shape` `start-listening!` `stop-listening!` | listens on the channel `groundwork-live-updates`, tells every open line; its batch window, waits and reconnect delay are required settings, the app's log, meter and tables required options |
-| server | `add-sse-line!` `remove-sse-line!` `count-open-lines` | for bridge's `:on-sse-open` and `:on-sse-close` |
+| server | `put-table-notes-into-handlers` | every answer notes the tables its steps read (`:groundwork-steps/notes`) |
+| server | `listening-settings-shape` `start-listening!` `stop-listening!` | listens on the channel `groundwork_live_updates`, tells every open line by the app's `:push!`; its batch window, waits and reconnect delay are required settings, the app's log, meter, tables, `:push!` and `:find-line-key` required options |
+| server | `add-sse-line!` `remove-sse-line!` `count-open-lines` | for the app's sse open and close hooks; a line kept under its `:find-line-key` |
 | both | `store-settings-shape` | the question store's settings, every key required |
-| browser | `make-question-store` | answers kept by question, `[name params]`, asked through bridge's `send-message!` |
+| browser | `make-question-store` | answers kept by question, `[name params]`, asked through the app's send (groundwork-bridge's `send-message!` in groundwork) |
 | browser | `watch-question!` `ask-question-again!` `find-kept-answer` | a screen watches what it shows; asked now, and again when a table it read changes |
 | browser | `is-question-being-asked?` | whether a fresher answer is on its way: out now, or a gathered change will ask it |
 | browser | `hear-changed-table!` | a table changed, told by the browser itself (a write's answer): gathered, then what read it is asked again |
@@ -86,7 +90,11 @@ and [listening's numbers](decisions/2026-10-22-listening-s-numbers-are-settings.
                                           :stop-wait-ms           2000}  ; how long stop-listening! waits
                                      {:log    log                        ; the app's: a break in listening is written to it
                                       :meter  meter                      ; the app's: changes heard, lines told, listening
-                                      :tables [orders logs]}))           ; the tables that tell are the changes' set
+                                      :tables [orders logs]                ; the tables that tell are the changes' set
+                                      ;; the app's wire (groundwork's: groundwork-bridge's sse lines)
+                                      :push!         #(bridge/send-message-on-sse-line! %1 %2 nil)
+                                      :find-line-key :groundwork-bridge/channel}))
+;; plugged into the app's wire, as groundwork does it with groundwork-bridge
 (bridge/make-routes-for-messages
  (live-updates/put-table-notes-into-handlers handlers)   ; each writes out :run-steps-in, nil for none
  settings
@@ -97,7 +105,7 @@ and [listening's numbers](decisions/2026-10-22-listening-s-numbers-are-settings.
   :on-sse-close #(live-updates/remove-sse-line! bell %)
   …})
 
-;; the browser
+;; the browser, plugged into the wire the same way
 (def store (live-updates/make-question-store #(bridge/send-message! (:http addresses) shapes-by-name % {:shaper shaper :headers {} :keep-alive? false})
                                          {:gather-changes-ms         50       ; changes heard together, one round of asking
                                           :keep-unwatched-answers-ms 300000})) ; an unwatched answer is kept this long

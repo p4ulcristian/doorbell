@@ -47,16 +47,21 @@
    groundwork-postgres's listener counts its reconnects on it; one make-meter didn't
    make is refused (:groundwork-metrics/not-a-meter). :tables: the app's table maps, as
    put-live-updates-on-tables takes them: the ones that tell are the set the
-   changes are counted by."
+   changes are counted by. :push!: (fn [line message]), how an open line is
+   told a message (the app's wire, groundwork-bridge's sse line in
+   groundwork). :find-line-key: (fn [line]), what tells one line from
+   another, the key the lines are kept under."
   [:map {:closed true}
    [:log [fn? {:error/message "should be the app's log function, made by groundwork-logs"}]]
    [:meter [some? {:error/message "should be the app's meter, made by groundwork-metrics.api/make-meter"}]]
-   [:tables [:sequential map?]]])
+   [:tables [:sequential map?]]
+   [:push! [fn? {:error/message "should say how an open line is told a message, (fn [line message])"}]]
+   [:find-line-key [ifn? {:error/message "should say what tells one line from another, (fn [line])"}]]])
 
 (def handler-shape
   "What put-table-notes-into-handlers reads of a handler: its
-   :run-steps-in, bridge's, written out, nil to run the steps plainly.
-   The rest of the handler is bridge's to check."
+   :run-steps-in, the runner's (groundwork-bridge's), written out, nil to
+   run the steps plainly. The rest of the handler is the runner's to check."
   [:map
    [:run-steps-in [:maybe fn?]]])
 
